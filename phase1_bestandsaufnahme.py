@@ -44,7 +44,9 @@ TIMEFRAMES = [
     ("H4", "TIMEFRAME_H4", 14400),
     ("D1", "TIMEFRAME_D1", 86400),
 ]
-MAX_BARS = 200_000  # Obergrenze pro Abfrage; das Terminal begrenzt zusätzlich über "Max. Balken im Chart"
+MAX_BARS = 200_000  # Obergrenze pro Abfrage; zusätzlich begrenzt auf "Max. Balken im Chart" des Terminals
+# Pfade, unter denen Broker Aktien/ETFs/Fonds führen – solche Symbole sind kein Gold/Bitcoin-CFD
+EXCLUDED_PATH_WORDS = ("STOCK", "SHARE", "ETF", "FUND", "NYSE", "NASDAQ", "AMEX", "EQUIT", "INDEX", "INDIC")
 
 ASSETS = {
     "gold": {
@@ -52,12 +54,14 @@ ASSETS = {
         "base": ("XAU", "GOLD"),
         "patterns": [r"^XAUUSD", r"^GOLD", r"XAU", r"GOLD"],
         "preferred_quote": "USD",
+        "min_price": 500,  # Gold kostet weit über 500 USD/EUR je Unze
     },
     "btc": {
         "label": "Bitcoin",
         "base": ("BTC", "XBT", "BITCOIN"),
         "patterns": [r"^BTCUSD", r"^XBTUSD", r"^BITCOIN", r"BTC", r"XBT", r"BITCOIN"],
         "preferred_quote": "USD",
+        "min_price": 1000,  # schließt Aktien/ETFs wie "BTC" (Kurs ~36 USD) aus
     },
 }
 
@@ -196,9 +200,14 @@ def score_symbol(sym, asset: dict) -> int:
             score = max(score, 100 - 10 * i)
     if score == 0:
         return 0
+    path = (getattr(sym, "path", "") or "").upper()
+    if any(w in path for w in EXCLUDED_PATH_WORDS):
+        return 0
     base = (getattr(sym, "currency_base", "") or "").upper()
     if base in asset["base"]:
         score += 20
+    elif not re.match(asset["patterns"][0], name) and not re.match(asset["patterns"][1], name):
+        return 0  # z. B. Aktie "BTC" mit Basiswährung USD
     if (getattr(sym, "currency_profit", "") or "").upper() == asset["preferred_quote"]:
         score += 15
     if getattr(sym, "trade_mode", 0) == 4:  # SYMBOL_TRADE_MODE_FULL
@@ -234,12 +243,21 @@ def find_symbols(rep: Report, mt5, args) -> dict:
         elif cands:
             chosen = cands[0][1].name
         else:
-            rep.add(s, f"{asset['label']}-Symbol", FAIL, "kein passendes Symbol gefunden")
+            rep.add(s, f"{asset['label']}-Symbol", FAIL,
+                    f"kein passendes Symbol (CFD) gefunden – dein Broker/Server bietet es evtl. nicht an. "
+                    f"Mit --suche {'BTC' if key == 'btc' else 'XAU'} suchen und mit --{key} vorgeben.")
             continue
 
         if not mt5.symbol_select(chosen, True):
             rep.add(s, f"{asset['label']}-Symbol", FAIL, f"{chosen} – symbol_select fehlgeschlagen: {mt5.last_error()}")
             continue
+        tick = mt5.symbol_info_tick(chosen)
+        if tick is not None and 0 < tick.bid < asset["min_price"]:
+            rep.add(s, f"{asset['label']}-Symbol", FAIL if not forced else WARN,
+                    f"{chosen} – Kurs {tick.bid} ist für {asset['label']} unplausibel (< {asset['min_price']}). "
+                    f"Mit --suche {key.upper()} alle Symbole anzeigen und mit --{key} vorgeben.")
+            if not forced:
+                continue
         others = ", ".join(x.name for _, x in cands[:6] if x.name != chosen)
         rep.add(s, f"{asset['label']}-Symbol", OK, f"{chosen}" + (f" (weitere Kandidaten: {others})" if others else ""))
         selected[key] = chosen
@@ -318,20 +336,35 @@ def check_quotes(rep: Report, mt5, key: str, name: str, sample_seconds: int) -> 
         rep.add(s, f"Live-Aktualisierung ({sample_seconds}s)", OK, f"{updates} neue Ticks, {len(seen)} versch. Kurse")
     else:
         rep.add(s, f"Live-Aktualisierung ({sample_seconds}s)", WARN,
-                "keine neuen Ticks – Markt evtl. geschlossen (Gold: Wochenende/tägl. Pause)")
+                "keine neuen Ticks – Markt evtl. geschlossen (Wochenende/Handelspause)")
 
 
 # --------------------------------------------------------------------------- 5. Historie
 
+def fetch_rates(mt5, name: str, timeframe, count: int):
+    """Kerzen abrufen. MT5 lehnt zu große Anfragen komplett ab ("Invalid params") –
+    dann mit halbierter Anzahl erneut versuchen. Beim ersten Abruf lädt das Terminal evtl.
+    noch nach, daher einmal kurz warten."""
+    waited = False
+    while count >= 500:
+        rates = mt5.copy_rates_from_pos(name, timeframe, 0, count)
+        if rates is not None and len(rates) > 0:
+            return rates
+        if not waited:
+            waited = True
+            time.sleep(2)
+            continue
+        count //= 2
+    return None
+
+
 def check_history(rep: Report, mt5, key: str, name: str) -> None:
     s = f"Historie {name}"
     hist = {}
+    ti = mt5.terminal_info()
+    max_bars = min(MAX_BARS, ti.maxbars) if ti is not None and ti.maxbars else 10_000
     for tf_name, const, secs in TIMEFRAMES:
-        rates = mt5.copy_rates_from_pos(name, getattr(mt5, const), 0, MAX_BARS)
-        if rates is None or len(rates) == 0:
-            # Beim ersten Abruf lädt das Terminal Daten evtl. noch nach – kurz warten, erneut versuchen.
-            time.sleep(2)
-            rates = mt5.copy_rates_from_pos(name, getattr(mt5, const), 0, MAX_BARS)
+        rates = fetch_rates(mt5, name, getattr(mt5, const), max_bars)
         if rates is None or len(rates) == 0:
             hist[tf_name] = {"bars": 0, "error": str(mt5.last_error())}
             rep.add(s, tf_name, FAIL, f"keine Daten ({mt5.last_error()})")
@@ -436,6 +469,26 @@ def write_report(rep: Report, out_dir: Path) -> tuple[Path, Path]:
     return md_path, json_path
 
 
+def list_symbols(args) -> int:
+    import MetaTrader5 as mt5
+    kwargs = {"path": args.terminal} if args.terminal else {}
+    if not mt5.initialize(**kwargs):
+        print(f"initialize() fehlgeschlagen: {mt5.last_error()}")
+        return 1
+    try:
+        text = args.suche.upper()
+        hits = [x for x in (mt5.symbols_get() or ())
+                if text in x.name.upper() or text in (x.description or "").upper()]
+        print(f"{len(hits)} Symbole mit '{args.suche}':\n")
+        print(f"{'Symbol':<20} {'Basis':<8} {'Kurs':>12}  {'Pfad':<40} Beschreibung")
+        for x in sorted(hits, key=lambda x: x.name)[:300]:
+            price = x.bid or x.last
+            print(f"{x.name:<20} {x.currency_base:<8} {price:>12}  {x.path[:40]:<40} {x.description}")
+    finally:
+        mt5.shutdown()
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Phase 1 – technische Bestandsaufnahme MT5 (nur lesend)")
     ap.add_argument("--terminal", help="Pfad zu terminal64.exe (optional)")
@@ -444,10 +497,15 @@ def main() -> int:
     ap.add_argument("--server", help="Server (optional)")
     ap.add_argument("--gold", help="Gold-Symbol fest vorgeben, z. B. XAUUSD")
     ap.add_argument("--btc", help="Bitcoin-Symbol fest vorgeben, z. B. BTCUSD")
+    ap.add_argument("--suche", metavar="TEXT",
+                    help="nur Symbole auflisten, deren Name/Beschreibung TEXT enthält (z. B. BTC), dann beenden")
     ap.add_argument("--sample-seconds", type=int, default=10, help="Dauer der Live-Kursprüfung je Symbol")
     ap.add_argument("--timeout-ms", type=int, default=60_000)
     ap.add_argument("--out", default=str(Path(__file__).resolve().parent / "reports"))
     args = ap.parse_args()
+
+    if args.suche:
+        return list_symbols(args)
 
     print("Phase 1 – Technische Bestandsaufnahme (nur lesend, keine Trades)")
     rep = Report()

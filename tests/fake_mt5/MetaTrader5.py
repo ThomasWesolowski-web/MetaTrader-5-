@@ -23,16 +23,16 @@ Account = namedtuple("Account", "login server company currency trade_mode levera
 Symbol = namedtuple("Symbol", "name description path currency_base currency_profit currency_margin digits point "
                     "trade_contract_size trade_tick_size trade_tick_value volume_min volume_max volume_step "
                     "trade_stops_level trade_freeze_level spread_float swap_long swap_short trade_mode "
-                    "filling_mode visible")
+                    "filling_mode visible bid last")
 Tick = namedtuple("Tick", "time bid ask last volume time_msc flags volume_real")
 
 _NOW = int(time.time())
-_PRICES = {"XAUUSD": (2650.0, 2, 0.01), "BTCUSD": (68000.0, 2, 0.01)}
+_PRICES = {"XAUUSD": (2650.0, 2, 0.01), "BTCUSD": (68000.0, 2, 0.01), "BTC": (36.0, 2, 0.01)}
 
 
 def _sym(name, desc, path, base, digits, point, cs, vis=True):
     return Symbol(name, desc, path, base, "USD", "USD", digits, point, cs, point, 1.0, 0.01, 100.0, 0.01,
-                  0, 0, True, -10.0, 2.0, 4, 3, vis)
+                  0, 0, True, -10.0, 2.0, 4, 3, vis, _PRICES.get(name, (1.1,))[0], 0.0)
 
 
 _SYMBOLS = [
@@ -42,6 +42,9 @@ _SYMBOLS = [
     _sym("GOLD.mini", "Gold mini", "Metals\\GOLD.mini", "XAU", 2, 0.01, 10, vis=False),
     _sym("BTCUSD", "Bitcoin vs US Dollar", "Crypto\\BTCUSD", "BTC", 2, 0.01, 1),
     _sym("BTCEUR", "Bitcoin vs Euro", "Crypto\\BTCEUR", "BTC", 2, 0.01, 1, vis=False),
+    # Wie beim echten MetaQuotes-Demo-Server: Aktie/ETF mit Kürzel "BTC" – darf NICHT gewählt werden
+    _sym("BTC", "Grayscale Bitcoin Mini Trust", "Stocks\\NYSE\\BTC", "USD", 2, 0.01, 1),
+    _sym("BTCL", "Bitcoin ETF leveraged", "ETFs\\BTCL", "USD", 2, 0.01, 1),
 ]
 _calls = []
 
@@ -86,7 +89,8 @@ _RATE_DT = [("time", "<i8"), ("open", "<f8"), ("high", "<f8"), ("low", "<f8"), (
 
 def copy_rates_from_pos(n, tf, start, count):
     secs = _TF_SECS[tf]
-    count = min(count, terminal_info().maxbars)
+    if count > terminal_info().maxbars:
+        return None  # echtes MT5 lehnt zu große Anfragen ab: (-2, 'Terminal: Invalid params')
     t = _NOW - _NOW % secs - np.arange(count)[::-1] * secs
     base = _PRICES.get(n, (1.1,))[0]
     close = base + np.cumsum(np.random.normal(0, base * 0.0005, count))

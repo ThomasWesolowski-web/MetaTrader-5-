@@ -34,6 +34,9 @@ python phase1_bestandsaufnahme.py --terminal "C:\Program Files\MetaTrader 5\term
 :: Wenn die automatische Symbolerkennung das falsche Symbol wählt
 python phase1_bestandsaufnahme.py --gold XAUUSD --btc BTCUSD
 
+:: Alle Symbole auflisten, die "BTC" im Namen oder in der Beschreibung haben (mit Basiswährung, Kurs, Pfad)
+python phase1_bestandsaufnahme.py --suche BTC
+
 :: Längere Live-Kursprüfung (Standard: 10 Sekunden je Symbol)
 python phase1_bestandsaufnahme.py --sample-seconds 30
 ```

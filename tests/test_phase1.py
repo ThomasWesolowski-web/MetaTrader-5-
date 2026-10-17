@@ -34,6 +34,7 @@ class Phase1Test(unittest.TestCase):
         for a in assets.values():
             self.assertGreater(a["quotes"]["ask"], a["quotes"]["bid"])
             self.assertGreater(a["history"]["D1"]["bars"], 0)
+            self.assertLessEqual(a["history"]["D1"]["bars"], 100_000)
         # Außer OS-Prüfung (Linux) und pip-Metadaten des Fake-Pakets darf nichts fehlschlagen.
         fails = [c for c in report["checks"] if c["status"] == "FEHLER" and c["name"] not in ("Betriebssystem", "Paket MetaTrader5")]
         self.assertEqual(fails, [], proc.stdout + proc.stderr)
