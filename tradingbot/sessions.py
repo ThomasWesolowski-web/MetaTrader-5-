@@ -94,12 +94,21 @@ class Calendar:
 
 
 class AlwaysOpen(Calendar):
+    """Durchgehend handelbar. Broker schließen Krypto-CFDs trotzdem teils an Weihnachten/Neujahr
+    und (früher) am Wochenende – das wird in quality.classify_gaps gesondert eingeordnet."""
     name = "24x7"
     always_open = True
 
     def open_intervals(self, start, end):
         return (np.array([pd.Timestamp(start).value - 1], dtype="int64"),
                 np.array([pd.Timestamp(end).value + 1], dtype="int64"))
+
+    def holidays(self, start, end):
+        out = {}
+        for y in range(pd.Timestamp(start).year - 1, pd.Timestamp(end).year + 2):
+            out[dt.date(y, 12, 25)] = "Weihnachten"
+            out[dt.date(y, 1, 1)] = "Neujahr"
+        return out
 
 
 class CmeMetals(Calendar):

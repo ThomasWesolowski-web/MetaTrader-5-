@@ -86,8 +86,9 @@ def test_validation_against_terminal(make_fake, client_for):
     for s in specs:
         assert abs(v[s]["profit_1lot_plus1pct"]["abweichung_pct"]) < 0.05
         assert abs(v[s]["tick_value"]["abweichung_pct"]) < 0.05
-    assert specs["BTCUSD"].margin_rate == pytest.approx(25.0, rel=1e-3)   # kalibriert: eff. Hebel 1:20
-    assert v["BTCUSD"]["margin_1lot"]["effektiver_hebel"] == pytest.approx(20.0, rel=1e-2)
+    assert specs["BTCUSD"].calc_mode == "FOREX_NO_LEVERAGE"                  # wie bei Vantage
+    assert specs["BTCUSD"].margin_rate == pytest.approx(0.002, rel=1e-2)    # kalibriert
+    assert v["BTCUSD"]["margin_1lot"]["effektiver_hebel"] == pytest.approx(500.0, rel=1e-2)
 
 
 def test_spec_roundtrip():
@@ -103,3 +104,12 @@ def test_margin_of_price_based_cfd_is_in_profit_currency():
     assert rc.margin(1.0, 80000.0)[0] == pytest.approx(4000 / 1.10)
     fx = gold(symbol="EURUSD", currency_base="EUR", currency_margin="EUR", calc_mode="FOREX", contract_size=100000)
     assert fx.margin_result_currency == "EUR"
+
+
+def test_cross_rate_via_intermediate_currency():
+    c = CurrencyConverter()
+    c.add_live("EURUSD", "EUR", "USD", 1.10)
+    c.add_live("BTCUSD", "BTC", "USD", 80000.0)
+    assert c.rate("BTC", "EUR")[0] == pytest.approx(80000 / 1.10)       # BTC -> USD -> EUR
+    assert c.rate("EUR", "BTC")[0] == pytest.approx(1.10 / 80000)
+    assert c.can_convert("BTC", "EUR") and not c.can_convert("JPY", "EUR")

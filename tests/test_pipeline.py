@@ -17,7 +17,8 @@ def test_end_to_end(make_fake, client_for, tmp_path, capsys):
     assert rc == 0
     specs = json.loads((tmp_path / "data" / "specs.json").read_text(encoding="utf-8"))
     assert specs["time_scheme"]["scheme"] == "ny_close"
-    assert [c["symbol"] for c in specs["conversions"]] == ["EURUSD"]
+    assert [c["symbol"] for c in specs["conversions"]] == ["EURUSD"]   # BTC-Margin über BTCUSD x EURUSD
+    assert specs["warnings"] == []
     assert set(specs["instruments"]) == {"XAUUSD", "BTCUSD"}
     for sym in ("XAUUSD", "BTCUSD"):
         for tf in ("M1", "M5", "M15", "M30", "H1", "H4", "D1"):

@@ -96,7 +96,7 @@ class FakeMT5:
             "XAUUSD": dict(base="XAU", profit="USD", cs=100.0, point=0.01, digits=2, price=2600.0, vol=0.0004,
                            calc=4, margin_rate=1.0, spread=25, path="Metals\\XAUUSD"),
             "BTCUSD": dict(base="BTC", profit="USD", cs=1.0, point=0.01, digits=2, price=80000.0, vol=0.0008,
-                           calc=4, margin_rate=25.0, spread=1700, path="Crypto\\BTCUSD"),
+                           calc=5, margin_rate=0.002, spread=1700, path="Crypto\\BTCUSD"),  # wie Vantage
             "EURUSD": dict(base="EUR", profit="USD", cs=100000.0, point=1e-5, digits=5, price=1.08, vol=0.0001,
                            calc=0, margin_rate=1.0, spread=8, path="Forex\\EURUSD"),
         }
@@ -230,7 +230,10 @@ class FakeMT5:
 
     def order_calc_margin(self, action, sym, volume, price):
         sp = self.specs[sym]
-        usd = volume * sp["cs"] * price / self.leverage * sp["margin_rate"]
+        if sp["calc"] == 5:      # FOREX_NO_LEVERAGE: Margin in Basiswährung = Volumen x Kontrakt x Satz
+            usd = volume * sp["cs"] * sp["margin_rate"] * price
+        else:                    # CFDLEVERAGE
+            usd = volume * sp["cs"] * price / self.leverage * sp["margin_rate"]
         return round(usd / self._eurusd(), 2)
 
     def order_send(self, *a, **k):

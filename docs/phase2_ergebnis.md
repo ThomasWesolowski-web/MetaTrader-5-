@@ -1,18 +1,15 @@
 # Phase 2 – Datenbasis: Ergebnis
 
 **Stand:** 18.10.2026 · **Trades ausgeführt:** keine (weder Demo noch Echtgeld)
-**Status:** Software fertig und mit 71 automatisierten Tests geprüft (simulierter MT5-Markt).
-**Ausstehend:** erster Lauf auf dem Windows-PC mit VantageMarkets-Demo – erst dieser zeigt, wie weit die
-echten Daten zurückreichen. Die Ergebnisse werden im Abschnitt [Echte Daten](#echte-daten-vantagemarkets-demo) ergänzt.
+**Status:** abgeschlossen. Echte Daten von VantageMarkets-Demo geladen und geprüft
+(Gold ab 2007, Bitcoin ab 2018 in M1), 75 automatisierte Tests bestanden.
 
-## Ehrliche Einordnung
+## Einordnung
 
-Die Entwicklung lief in einer Linux-Cloud-Umgebung ohne Zugriff auf das MT5-Terminal. Alle Funktionen
-wurden gegen einen simulierten Markt getestet, der die in Phase 1 beobachteten Eigenheiten nachbildet
-(Serverzeit mit Sommerzeitwechsel, Goldpausen, Feiertage, Broker-Wartung, begrenzte Historie,
-abgelehnte Großabfragen). Wie weit die Historie bei Vantage tatsächlich reicht, welches Zeitschema der
-Server nutzt und wie sauber die echten Daten sind, ist **noch nicht gemessen** – dafür ist der Lauf
-`python daten_aktualisieren.py` auf dem PC nötig. Es wurden keine Kursdaten erfunden oder angenommen.
+Die Software wurde in einer Linux-Cloud-Umgebung ohne Zugriff auf das MT5-Terminal entwickelt und dort gegen
+einen simulierten Markt getestet. Ausgeführt wurde sie auf dem Windows-PC gegen VantageMarkets-Demo; die
+Ergebnisse im Abschnitt [Echte Daten](#echte-daten-vantagemarkets-demo) stammen aus diesen Läufen
+(Datenbericht vom 18.10.2026, 12:59 UTC). Es wurden keine Kursdaten erfunden, aufgefüllt oder verändert.
 
 ## Umsetzung der Anforderungen
 
@@ -99,14 +96,14 @@ bewertet. **Daten werden nur markiert, nie verändert, gelöscht oder aufgefüll
 
 ## Tests
 
-`python -m pytest` – 71 Tests, alle bestanden (Laufzeit ca. 30 s):
+`python -m pytest` – 75 Tests, alle bestanden (Laufzeit ca. 30 s):
 
 | Datei | Tests | Prüft |
 |---|---|---|
 | test_importer.py | 12 | gespeicherte Daten = MT5-Daten (nichts erfunden), Blockgrößen, Halbierung abgelehnter Abfragen, echte UTC-Zeiten bei zwei Serverschemata, inkrementelles Update lädt exakt die neuen Kerzen, laufende Kerze wird nicht gespeichert, Nachladen erweiterter Historie, Fortsetzen nach Abbruch, Neuberechnung bei Schemawechsel |
 | test_server_time.py | 21 | Abstände inkl. Sommerzeit, Hin-/Rückrechnung, MT5-Semantik, Live-Abstand, Erkennung von `ny_close`, `eu_dst` und festem Abstand mit/ohne Live-Messung |
-| test_quality.py | 7 | nur die eingebaute echte Lücke ist unerklärt, Wochenenden/Tagespausen/5 Feiertage erkannt, Bitcoin-Wartung und Minuten ohne Ticks, Fehltick gefunden, Wochenend-Gap kein Ausreißer, Integritätsfehler, manipulierte Kerze in der Konsistenzprüfung |
-| test_instruments.py | 10 | Gewinn in EUR, Positionsgröße/Abrundung, Margin-Modi, Umrechnung nur mit vergangenen Kursen, Wahl des Umrechnungssymbols, Abgleich mit Terminal-Rechenfunktionen |
+| test_quality.py | 9 | nur die eingebaute echte Lücke ist unerklärt, Wochenenden/Tagespausen/5 Feiertage erkannt, Bitcoin-Wartung und Minuten ohne Ticks, Fehltick gefunden, Wochenend-Gap kein Ausreißer, ruhiger Markt bläht Ausreißer nicht auf, Broker-Schließzeiten bei Bitcoin, Integritätsfehler, manipulierte Kerze in der Konsistenzprüfung |
+| test_instruments.py | 12 | Gewinn in EUR, Positionsgröße/Abrundung, Margin-Modi (inkl. FOREX_NO_LEVERAGE wie Vantage-BTCUSD), Umrechnung nur mit vergangenen Kursen, Kreuzkurs BTC→USD→EUR, Wahl des Umrechnungssymbols, Abgleich mit Terminal-Rechenfunktionen |
 | test_sessions.py | 9 | Ostern/US-Feiertage, Gold-Sitzungen in Sommer- und Winterzeit, Handelszeit-Berechnung |
 | test_storage.py | 5 | Jahrespartitionen, Duplikate, Laden nach Zeitraum, Neuberechnung UTC, Metadaten |
 | test_strategies.py | 3 | Registrierung, Parameterprüfung, Signalprüfung, Datenzugriff |
@@ -120,14 +117,13 @@ fälschlich als „Tagespause“ eingestuft; die Gewinnvalidierung wurde durch d
 
 ## Bekannte Einschränkungen
 
-1. **Historientiefe** hängt vom Broker und von „Max. Balken im Chart“ (aktuell 100 000) ab. Für tiefere
-   M1/M5-Historie in MT5 unter Extras → Optionen → Charts auf „Unbegrenzt“ stellen, Terminal neu starten,
-   `daten_aktualisieren.py` erneut starten – fehlende ältere Daten werden dann nachgeladen.
+1. **Historientiefe** hängt vom Broker und von „Max. Balken im Chart“ ab (auf dem PC: „Unbegrenzt“).
+   Wird die Einstellung zurückgesetzt, bleiben die lokal gespeicherten Daten erhalten.
 2. **Sommerzeit-Rückstellung:** Bei der Umstellung auf Winterzeit ist eine Stunde Serverzeit doppelt belegt;
    MT5 führt die Kerzen dieser Stunde zusammen. Bei Bitcoin (24/7) erscheint dadurch einmal im Jahr eine
    1-Stunden-Lücke in UTC. Gold ist nicht betroffen (Markt zu dieser Zeit geschlossen).
-3. **Feiertage** folgen dem US-Kalender; abweichende Broker-Handelszeiten erscheinen als „unerklärt“ und
-   werden im Bericht aufgelistet.
+3. **Feiertage** folgen dem US-Kalender (Gold) bzw. Weihnachten/Neujahr (Bitcoin). Abweichende
+   Broker-Handelszeiten erscheinen als „regelmäßige Pause“ oder „unerklärt“ und werden im Bericht aufgelistet.
 4. **Umrechnung** mit Schlusskursen; MT5 rechnet live mit Bid/Ask (Unterschied ≈ EURUSD-Spread, ~0,01 %).
 5. **Swap und Kommission** werden erfasst, aber noch nicht in Gewinn/Verlust eingerechnet (Phase 3).
 6. Die Rückwärtssuche endet nach 3 leeren Blöcken. Eine Historienlücke von mehr als 3 Blöcken
@@ -153,18 +149,79 @@ Historienende geladen, ohne Fehler.
   aber nur für die US-Sommerzeit; im Winter gilt UTC+2.
 - Gegenüber Phase 1 (50 000 Kerzen pro Abfrage) reicht M1 jetzt 19 Jahre (Gold) bzw. fast 9 Jahre (Bitcoin) zurück.
 
-### Im ersten Lauf gefundene Fehler (behoben)
+### Beim Lauf auf dem PC gefundene Fehler (behoben)
 
-1. **BTCEUR wurde unnötig als Umrechnungssymbol geladen.** Ursache: Für die Margin wurde die von MT5
-   gemeldete Marginwährung (BTC) umgerechnet. Bei Preis-CFDs liefert die Margin-Formel aber Preiseinheiten
-   (USD). Behoben; der Ordner `data/market/BTCEUR` kann gelöscht werden.
-2. **Speicherfehler (MemoryError) in der Qualitätsprüfung.** Ursache: Die komplette Zeitspalte wurde in
+1. **Speicherfehler (MemoryError) in der Qualitätsprüfung.** Ursache: Die komplette Zeitspalte wurde in
    Python-Objekte umgewandelt (bei Zeitzonen-Daten erzeugt pandas dabei Millionen Einzelobjekte).
    Gemessen bei 3,6 Mio. Kerzen: zusätzlicher Speicher 450 MB → 30 MB, Laufzeit halbiert.
-3. **Umrechnungssymbole** werden nur noch in M5/H1/D1 geladen und geprüft (`conversion_timeframes`);
-   M5 genügt für die EUR-Umrechnung (Fehler ≈ 0,02 %). Die bereits geladenen EURUSD-Ordner M1, M15, M30
-   und H4 werden nicht mehr verwendet und können gelöscht werden.
+2. **Umrechnungssymbole** werden nur noch in M5/H1/D1 geladen und geprüft (`conversion_timeframes`);
+   M5 genügt für die EUR-Umrechnung (Fehler ≈ 0,02 %). Nicht mehr benötigt: `data/market/EURUSD/M1, M15, M30, H4`.
+3. **Margin bei Bitcoin:** Vantage rechnet BTCUSD im Modus `FOREX_NO_LEVERAGE` ab (Margin = Volumen ×
+   1 BTC × Marginsatz, also in BTC). Dafür wurde BTCEUR geladen – dessen Historie beginnt aber erst im
+   Juli 2021. Jetzt wird über den Kreuzkurs BTCUSD × EURUSD umgerechnet (ab 2018 verfügbar, kein
+   Zusatzsymbol). Nicht mehr benötigt: `data/market/BTCEUR`.
+4. **Aufgeblähte Ausreißer bei Bitcoin:** In ruhigen Phasen (z. B. Juli 2020) war mehr als die Hälfte der
+   M1-Renditen 0, der Median damit 0 – Bewegungen von 0,2 % erhielten Scores um 20 000. Die Skala nutzt jetzt
+   zusätzlich den Mittelwert. Die Zahl der Ausreißer bei BTCUSD M1 (vorher 10 313) sinkt dadurch deutlich.
+5. **Broker-Schließzeiten bei Bitcoin** wurden als „unerklärt“ gezählt: jährlich Weihnachten und Neujahr
+   (jeweils 24 h) sowie in den Jahren 2018–2020 viele Wochenenden (Fr ~22:00 bis So ~22:00 UTC). Diese
+   werden jetzt als Feiertag bzw. Wochenende (Broker geschlossen) eingeordnet.
 
-### Qualitätsprüfung und Berechnungsabgleich
+Nach diesen Korrekturen ändern sich nur die Zählungen bei Bitcoin-Lücken und -Ausreißern; der Datenbestand
+selbst bleibt unverändert. Ein erneuter Lauf (`python daten_aktualisieren.py`) aktualisiert die Zahlen.
 
-*Ausstehend – folgt aus dem zweiten Lauf mit der korrigierten Version.*
+### Datenqualität (Bericht vom 18.10.2026)
+
+| | XAUUSD | BTCUSD | EURUSD |
+|---|---|---|---|
+| Duplikate / ungültige OHLC / Preise ≤ 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
+| Konsistenz M5…D1 mit M1 (Schluss, High/Low) | 100 % | 100 % | – |
+| Abdeckung der Handelszeit M1 | 99,96 % | 98,46 %¹ | 99,94 % (M5) |
+| unerklärte Lücken M1 | 12 (46,5 h) | 1 059 (1 188 h)¹ | 92 (M5, 106 h in 26 Jahren) |
+
+¹ vor Korrektur 5 (Broker-Schließzeiten wurden noch als unerklärt gezählt).
+
+**Echte Datenlücken (Broker-Historie):** Mehrere Lücken treten gleichzeitig bei verschiedenen Symbolen auf –
+das spricht für Ausfälle in der Kurshistorie des Brokers, nicht für Marktschließungen:
+
+| Zeitraum (UTC) | betroffen |
+|---|---|
+| 09.03.2020 21:00 – 11.03.2020 22:00 | XAUUSD (25 h), BTCUSD (48 h) – während des Corona-Crashs |
+| 04.08.2021, 06.08.2021, 08./09.08.2021 | XAUUSD (insgesamt ca. 16 h) |
+| 07./08.09.2023 | XAUUSD, BTCEUR (je 1–2 h) |
+| 08.03.2018 – 11.03.2018 | BTCUSD (71 h, Beginn der Historie) |
+
+**Gold – regelmäßige Pausen:** Viele tägliche Pausen in Golds Historie weichen um mehr als 20 Minuten vom
+CME-Zeitplan ab und werden daher als „regelmäßige Pause“ statt „Tagespause“ erkannt (beide gelten als
+erwartet). Die Broker-Handelszeiten für Gold entsprechen also nicht über die gesamte Historie exakt den CME-Zeiten.
+
+**Ausreißer sind überwiegend echte Marktereignisse** und werden deshalb nur markiert, nicht entfernt:
+US-Arbeitsmarktdaten (z. B. Gold 04.08.2023, 06.12.2019, 04.09.2026, jeweils 12:30/13:30 UTC),
+Wochenöffnung nach der Iran-Eskalation (Gold 05.01.2020 23:01 UTC), Goldeinbruch −5,7 % am 29.01.2026,
+Corona-Crash (BTCUSD 12./13.03.2020, −22 % in 4 h), Bitcoin-Crash 17.08.2023 (−9 % in 5 Min.).
+Einzelne „spike“-Markierungen (M1: Gold 112, Bitcoin 771 vor Korrektur) können Fehlticks sein – für
+Backtests auf M1 sollten Strategien keine Ausführung zu einem einzelnen Extremkurs annehmen.
+
+### Abgleich der EUR-Berechnung mit dem Terminal
+
+| | XAUUSD | BTCUSD |
+|---|---|---|
+| Gewinn 1 Lot bei +1 % Kurs (eigene / MT5) | 3 706,54 € / 3 706,04 € (+0,013 %) | 729,50 € / 729,60 € (−0,014 %) |
+| Tickwert 1 Lot (eigene / MT5) | 0,88971 € / 0,88959 € (+0,013 %) | 0,008897 € / 0,008896 € (+0,013 %) |
+| Margin 1 Lot (MT5) / effektiver Hebel | 741,39 € / 1:500 | 145,98 € / 1:500 |
+| Berechnungsmodus | CFDLEVERAGE | FOREX_NO_LEVERAGE (Marginsatz 0,002) |
+| Swap long / short (MT5-Angabe) | −77,44 / +36,70 | −20 / 0 |
+
+Die Abweichung von ~0,013 % entspricht dem EURUSD-Spread (eigene Rechnung mit Mittelkurs, MT5 mit Bid/Ask)
+und ist für Backtests vernachlässigbar.
+
+### Konsequenzen für Phase 3
+
+- Backtests können auf M1 (Gold ab 2007, Bitcoin ab 2018) oder höheren Zeitrahmen laufen; die Zeitrahmen
+  sind untereinander zu 100 % konsistent.
+- Während echter Datenlücken (Tabelle oben) und Broker-Schließzeiten darf der Backtester keine Ausführung
+  annehmen; Stops über eine Lücke hinweg werden zum ersten Kurs danach ausgeführt (Gap-Risiko).
+- Swap (Gold long −77,44 je Lot und Tag laut MT5) ist bei mehrtägigen Positionen ein relevanter Kostenfaktor
+  und muss in Phase 3 eingerechnet werden.
+- Bitcoin hatte 2018–2020 bei Vantage keinen Wochenendhandel – Ergebnisse aus dieser Zeit sind für
+  Wochenendstrategien nicht repräsentativ.

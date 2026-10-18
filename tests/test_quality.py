@@ -91,3 +91,37 @@ def test_consistency_detects_tampered_bar(fake_ny):
     h1.loc[h1.index[len(h1) // 2], "close"] += 5
     bad = consistency_with_m1(m1, h1, "H1")
     assert bad["close_match_pct"] < 100.0
+
+
+def test_quiet_market_does_not_inflate_outliers():
+    """Mehr als die Hälfte der Kerzen ohne Kursänderung (Median-Rendite 0): kleine Bewegungen
+    dürfen nicht als Ausreißer gelten, ein echter Fehltick schon (Fall BTCUSD M1 Juli 2020)."""
+    n = 5000
+    rng = np.random.default_rng(5)
+    r = np.where(rng.random(n) < 0.7, 0.0, rng.normal(0, 5e-4, n))
+    r[2000] = 0.002                       # normale 0,2-%-Bewegung
+    r[3000], r[3001] = 0.03, -0.03        # Fehltick +3 % und zurück
+    close = 9000 * np.exp(np.cumsum(r))
+    t = pd.date_range("2020-07-01", periods=n, freq="1min", tz="UTC")
+    df = pd.DataFrame({"time": t, "time_server": t.as_unit("ns").asi8 // 10**9, "open": close,
+                       "high": close, "low": close, "close": close, "tick_volume": 1, "spread": 1, "real_volume": 0})
+    a = detect_anomalies(df, "M1", Q)
+    assert t[2000] not in set(a["time"])
+    assert list(a.loc[a["kind"] == "spike", "time"]) == [t[3000]]
+
+
+def test_btc_broker_closures_on_weekend_and_holidays(fake_ny):
+    """Beobachtet bei Vantage: Bitcoin früher am Wochenende geschlossen, jedes Jahr an Weihnachten
+    und Neujahr. Das sind Broker-Schließzeiten, keine Datenfehler – ein Ausfall Mo–Mi bleibt unerklärt."""
+    df = frame(fake_ny, "BTCUSD", "H1")
+    cuts = [("2026-03-13 21:00", "2026-03-15 22:00"),   # Fr 17:00 – So 18:00 New York
+            ("2025-12-24 22:00", "2025-12-25 22:00"),   # Weihnachten
+            ("2026-03-30 21:00", "2026-04-01 21:00")]   # Mo–Mi: echter Ausfall
+    keep = np.ones(len(df), bool)
+    for a, b in cuts:
+        keep &= ~((df["time"] >= a) & (df["time"] < b))
+    res = check_bars(df[keep], "BTCUSD", "H1", get_calendar("24x7"), Q)
+    cat = res.gaps.set_index("start")["category"]
+    assert cat[pd.Timestamp(cuts[0][0], tz="UTC")] == "weekend"
+    assert cat[pd.Timestamp(cuts[1][0], tz="UTC")] == "holiday"
+    assert cat[pd.Timestamp(cuts[2][0], tz="UTC")] == "data_gap"

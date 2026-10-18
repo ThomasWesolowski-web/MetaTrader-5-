@@ -6,7 +6,8 @@ import pandas as pd
 
 from .config import Config
 from .importer import Importer
-from .instruments import CurrencyConverter, InstrumentSpec, RiskCalculator, find_conversion_symbol
+from .instruments import (CurrencyConverter, InstrumentSpec, RiskCalculator, conversion_sources,
+                          find_conversion_symbol)
 from .quality import check_bars, consistency_with_m1
 from .server_time import Detection, detect_scheme, estimate_live_offset, parse_scheme
 from .sessions import get_calendar
@@ -43,7 +44,9 @@ def validate_calculations(client, specs: dict, conversions: list[dict], account_
     """Eigene Gewinn-/Tickwert-/Margin-Berechnung mit den Rechenfunktionen des Terminals vergleichen.
     order_calc_profit/order_calc_margin erzeugen keine Order."""
     conv = CurrencyConverter()
-    for c in conversions:
+    sources = conversion_sources({"conversions": conversions,
+                                  "instruments": {k: v.to_dict() for k, v in specs.items()}})
+    for c in sources:
         t = client.tick(c["symbol"])
         if t and t.get("bid"):
             conv.add_live(c["symbol"], c["base"], c["quote"], (t["bid"] + t["ask"]) / 2)
@@ -103,8 +106,17 @@ def run_update(cfg: Config, client, log=print, now_utc_fn=None, symbols=None, ti
             specs[sym] = InstrumentSpec.from_mt5(info)
 
         conversions = []
-        needed = {c for s in specs.values() for c in (s.currency_profit, s.margin_result_currency)} - {acc_ccy}
-        for ccy in sorted(needed):
+        # Erst die Gewinnwährungen (z. B. USD über EURUSD), dann Marginwährungen – diese lassen sich
+        # oft über das Instrument selbst umrechnen (BTC -> USD über BTCUSD, dann USD -> EUR).
+        profit_ccys = {s.currency_profit for s in specs.values()} - {acc_ccy}
+        margin_ccys = {s.margin_result_currency for s in specs.values()} - {acc_ccy} - profit_ccys
+        for ccy in sorted(profit_ccys) + sorted(margin_ccys):
+            probe = CurrencyConverter()
+            for src in conversion_sources({"conversions": conversions,
+                                           "instruments": {k: v.to_dict() for k, v in specs.items()}}):
+                probe.add_live(src["symbol"], src["base"], src["quote"], 1.0)
+            if probe.can_convert(ccy, acc_ccy):
+                continue
             c = find_conversion_symbol(all_symbols, acc_ccy, ccy)
             if c is None:
                 warnings.append(f"Kein Umrechnungssymbol für {ccy}->{acc_ccy} gefunden")

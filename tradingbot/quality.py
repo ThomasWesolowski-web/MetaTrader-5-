@@ -5,9 +5,11 @@ Die Prüfung verändert keine Daten – sie markiert nur. Kategorien:
 Integrität     Duplikate, falsche Reihenfolge, fehlende Werte, Preise <= 0,
                ungültige OHLC (High < Low, Open/Close außerhalb High-Low), negativer Spread
 Lücken         jede Lücke zwischen zwei Kerzen wird eingeordnet als
-                 weekend         Wochenende laut Handelskalender
+                 weekend         Wochenende laut Handelskalender; bei 24/7-Märkten: Broker hatte
+                                 am Wochenende geschlossen (Fr 15:00 – So 24:00 New York)
                  daily_break     tägliche Handelspause laut Kalender
-                 holiday         Feiertag / verkürzter Handel (US-Feiertage bei Gold)
+                 holiday         Feiertag / verkürzter Handel (US-Feiertage bei Gold,
+                                 Weihnachten/Neujahr bei 24/7-Märkten)
                  low_activity    kurze Lücke (M1/M5) ohne Ticks – kein Datenfehler
                  recurring_pause wiederholt zur gleichen Serverzeit (z. B. Broker-Wartung)
                  data_gap        unerklärte Lücke = möglicher Datenfehler
@@ -29,6 +31,7 @@ from .sessions import Calendar, open_seconds_between
 from .timeframes import seconds
 
 GAP_EXPECTED = ("weekend", "daily_break", "holiday", "low_activity", "recurring_pause")
+NY = "America/New_York"
 
 
 @dataclass
@@ -103,6 +106,14 @@ def classify_gaps(df: pd.DataFrame, tf: str, calendar: Calendar, cfg: QualityCon
         has = (k < len(hol_dates)) & (hol_dates[np.minimum(k, len(hol_dates) - 1)] <= b)
         cat[~closed & has] = "holiday"
 
+    if calendar.always_open:
+        # 24/7-Markt, aber Broker hat am Wochenende geschlossen (Fr ab 15:00 bis So 24:00 New York)
+        ny0 = pd.DatetimeIndex(pd.to_datetime(g_start, utc=True)).tz_convert(NY)
+        ny1 = pd.DatetimeIndex(pd.to_datetime(g_end, utc=True)).tz_convert(NY)
+        fri = ny0.normalize() - pd.to_timedelta((ny0.weekday - 4) % 7, unit="D") + pd.Timedelta(hours=15)
+        in_weekend = (ny0 >= fri) & (ny1 <= fri + pd.Timedelta(days=2, hours=10)) & (dur_s >= 6 * 3600)
+        cat[(cat == "data_gap") & np.asarray(in_weekend)] = "weekend"
+
     if seconds(tf) <= 300:
         cat[(cat == "data_gap") & (open_s <= cfg.low_activity_max_min * 60)] = "low_activity"
 
@@ -143,14 +154,18 @@ def detect_anomalies(df: pd.DataFrame, tf: str, cfg: QualityConfig) -> pd.DataFr
     r_eval = np.where(across_gap, np.nan, r)
 
     minp = min(100, max(20, n // 10))
+    # Skala der normalen Schwankung: robuster Median, aber mindestens der Mittelwert. In ruhigen
+    # Phasen ist mehr als die Hälfte der Renditen 0 (Median = 0) – ohne Mittelwert würde dann jede
+    # kleine Bewegung zum "Ausreißer" (beobachtet bei BTCUSD M1 im Juli 2020).
     abs_r = pd.Series(np.abs(r_eval))
-    scale = abs_r.rolling(cfg.window, min_periods=minp, center=True).median().to_numpy() * 1.4826
-    scale = np.maximum(scale, 1e-7)
-    z = np.abs(r_eval) / scale
-    z = np.nan_to_num(z, nan=0.0)
+    roll = abs_r.rolling(cfg.window, min_periods=minp, center=True)
+    scale = np.fmax(roll.median().to_numpy() * 1.4826, roll.mean().to_numpy() * 1.2533)
+    scale = np.maximum(np.nan_to_num(scale, nan=np.inf), 1e-6)
+    z = np.nan_to_num(np.abs(r_eval) / scale, nan=0.0)
 
-    rng_med = pd.Series(rng).rolling(cfg.window, min_periods=minp, center=True).median().to_numpy()
-    rng_ratio = np.nan_to_num(rng / np.maximum(rng_med, 1e-7), nan=0.0)
+    rroll = pd.Series(rng).rolling(cfg.window, min_periods=minp, center=True)
+    rng_base = np.fmax(rroll.median().to_numpy(), rroll.mean().to_numpy())
+    rng_ratio = np.nan_to_num(rng / np.maximum(np.nan_to_num(rng_base, nan=np.inf), 1e-6), nan=0.0)
 
     out = []
     # Kursspitze mit sofortiger Rückkehr

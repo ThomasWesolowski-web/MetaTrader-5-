@@ -155,18 +155,41 @@ class CurrencyConverter:
         """Einzelner aktueller Kurs (z. B. für Live-Prüfungen)."""
         self.rates[symbol] = (np.array([0], dtype="int64"), np.array([price]), base, quote)
 
-    def rate(self, from_ccy: str, to_ccy: str, times=None) -> np.ndarray:
-        """Faktor, mit dem ein Betrag in from_ccy multipliziert wird, um to_ccy zu erhalten.
-        Vor dem ersten verfügbaren Kurs: NaN (es wird kein Kurs erfunden)."""
-        times_ns = (np.array([np.iinfo("int64").max]) if times is None
-                    else pd.DatetimeIndex(np.atleast_1d(times)).as_unit("ns").asi8)
-        if from_ccy == to_ccy:
-            return np.ones(len(times_ns))
+    def _direct(self, from_ccy: str, to_ccy: str, times_ns: np.ndarray) -> np.ndarray | None:
         for t, c, base, quote in self.rates.values():
             if (base, quote) in ((from_ccy, to_ccy), (to_ccy, from_ccy)):
                 i = np.searchsorted(t, times_ns, side="right") - 1
                 px = np.where(i >= 0, c[np.maximum(i, 0)], np.nan)
                 return px if base == from_ccy else 1.0 / px
+        return None
+
+    def currencies(self) -> set[str]:
+        return {x for _, _, b, q in self.rates.values() for x in (b, q)}
+
+    def can_convert(self, from_ccy: str, to_ccy: str) -> bool:
+        try:
+            self.rate(from_ccy, to_ccy, [pd.Timestamp.max.tz_localize("UTC")])
+            return True
+        except KeyError:
+            return False
+
+    def rate(self, from_ccy: str, to_ccy: str, times=None) -> np.ndarray:
+        """Faktor, mit dem ein Betrag in from_ccy multipliziert wird, um to_ccy zu erhalten.
+        Direkt über ein Währungspaar oder über eine Zwischenwährung (z. B. BTC -> USD -> EUR
+        mit BTCUSD und EURUSD). Vor dem ersten verfügbaren Kurs: NaN (es wird kein Kurs erfunden)."""
+        times_ns = (np.array([np.iinfo("int64").max]) if times is None
+                    else pd.DatetimeIndex(np.atleast_1d(times)).as_unit("ns").asi8)
+        if from_ccy == to_ccy:
+            return np.ones(len(times_ns))
+        direct = self._direct(from_ccy, to_ccy, times_ns)
+        if direct is not None:
+            return direct
+        for via in sorted(self.currencies() - {from_ccy, to_ccy}):
+            a = self._direct(from_ccy, via, times_ns)
+            if a is not None:
+                b = self._direct(via, to_ccy, times_ns)
+                if b is not None:
+                    return a * b
         raise KeyError(f"Kein Umrechnungskurs {from_ccy}->{to_ccy} verfügbar")
 
 
@@ -204,6 +227,16 @@ class RiskCalculator:
         if not np.isfinite(per_lot) or per_lot <= 0:
             return 0.0
         return round_volume_down(self.spec, risk_amount / (stop_distance * per_lot))
+
+
+def conversion_sources(specs_doc: dict) -> list[dict]:
+    """Kursquellen für die Umrechnung: Umrechnungssymbole und die gehandelten Instrumente selbst
+    (BTCUSD liefert BTC->USD, XAUUSD liefert XAU->USD)."""
+    out = list(specs_doc.get("conversions", []))
+    for sym, d in specs_doc.get("instruments", {}).items():
+        if d.get("currency_base") and d.get("currency_profit") and d["currency_base"] != d["currency_profit"]:
+            out.append({"symbol": sym, "base": d["currency_base"], "quote": d["currency_profit"]})
+    return out
 
 
 def find_conversion_symbol(symbols: list[dict], ccy_a: str, ccy_b: str) -> dict | None:
