@@ -9,7 +9,7 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 |---|---|---|
 | 1 | System prüfen, MT5-Verbindung, Symbole, Bid/Ask, Historie, Prüfbericht | ✅ abgeschlossen – [Ergebnis](docs/phase1_ergebnis.md) |
 | 2 | Datenbasis: Import, Parquet-Speicher, UTC, Qualitätsprüfung, EUR-Risikorechnung | ✅ umgesetzt – [Ergebnis](docs/phase2_ergebnis.md) |
-| 3 | Strategiebibliothek, Backtests, Walk-Forward, Strategieauswahl | 🔄 Software fertig – Lauf auf PC ausstehend ([Methodik](docs/phase3_ergebnis.md)) |
+| 3 | Strategiebibliothek, Backtests, Walk-Forward, Strategieauswahl | ✅ abgeschlossen – keine Strategie geeignet ([Ergebnis](docs/phase3_ergebnis.md)) |
 | 4+ | Demo-Handel, Streamlit-Dashboard | ⏸ wartet auf Freigabe |
 
 ## Phase 3: Backtests (nur Simulation)

@@ -1,10 +1,10 @@
 # Phase 3 – Strategieentwicklung, Backtesting und Strategieauswahl
 
 **Stand:** 18.10.2026 · **Nur Simulation:** keine Orders an MetaTrader 5, keine Demo- oder Echtgeld-Trades
-**Status:** Strategiebibliothek, Backtester und Walk-Forward-Auswertung fertig und mit 138 Tests geprüft.
-**Ausstehend:** Lauf auf dem Windows-PC mit den echten Vantage-Daten. Die Abschnitte
-[Ergebnisse](#ergebnisse-echte-daten) und [Empfehlung](#empfehlung-für-phase-4) werden ausschließlich aus diesem
-Lauf befüllt – es werden keine Ergebnisse angenommen oder geschätzt.
+**Status:** abgeschlossen. 138 Tests bestanden; Backtest-Lauf 2 mit echten Vantage-Daten (18.10.2026, 15:00 UTC).
+**Ergebnis: Für XAUUSD und BTCUSD ist aktuell keine Strategie für den Demohandel geeignet.**
+Maschinenlesbar: `docs/phase3_zusammenfassung.json` (kompakt, für das Dashboard) bzw. vollständig
+`reports/phase3_ergebnisse.json` auf dem PC.
 
 ## 1. Vorbereitung
 
@@ -135,64 +135,133 @@ Backtests beginnen deshalb je Markt ab „dicht ab“ – für Gold ab 2018, nic
 
 ## Ergebnisse (echte Daten)
 
-### Lauf 1 (18.10.2026, 14:01 UTC) – vorläufig
+### Lauf 2 (18.10.2026, 15:00 UTC) – maßgeblich
 
-120 Kombinationen (2 Märkte × 5 Zeitrahmen × 12 Strategien), Laufzeit 25 Minuten. **Ergebnis: Für XAUUSD und
-BTCUSD ist aktuell keine Strategie für den Demohandel geeignet.**
+120 Kombinationen (2 Märkte × 5 Zeitrahmen × 12 Strategien), Laufzeit 15,7 Minuten (2 Prozesse). Zeiträume ab
+dichten Daten, für beide Märkte gleich aufgebaut:
 
-**Bei der Auswertung gefundene Fehler (behoben, mit Regressionstests; erneuter Lauf nötig):**
+| Markt | Training (Walk-Forward + Parameterwahl) | Validierung | Test (nur Bestätigung) |
+|---|---|---|---|
+| XAUUSD | 01.04.2018 – 17.05.2023 | 17.05.2023 – 30.01.2025 | 30.01.2025 – 16.10.2026 |
+| BTCUSD | 01.04.2018 – 18.05.2023 | 18.05.2023 – 01.02.2025 | 01.02.2025 – 18.10.2026 |
 
-1. **Gold-Trainingszeitraum lag in praktisch leeren Daten.** Die Zeiträume wurden ab dem ersten D1-Datum (2007)
-   geteilt; Gold-Intraday ist aber erst ab 2018 dicht (2007–2017: 0,1–5 %). Im Training (2007–2019) entstanden daher
-   kaum Trades – deshalb gab es für Gold keine Walk-Forward-Ergebnisse. Jetzt beginnen die Zeiträume ab „dicht ab“.
-2. **Bitcoin-Trades 2018–2021 verworfen.** Die BTC-Margin wurde direkt über BTCEUR umgerechnet (Historie erst ab
-   07/2021); davor fehlte der Kurs und 933 Trades wurden als „Margin“ verworfen. Jetzt werden fehlende Direktkurse
-   über BTCUSD × EURUSD ergänzt.
+**2 von 120 Kombinationen nicht ausgewertet:** XAUUSD M1 `liquidity_sweep` und `smc_orderblock` brachen mit
+Speichermangel ab (2 parallele Prozesse). Beide gehörten in Lauf 1 zu den schlechtesten M1-Kombinationen
+(−0,9 bzw. −1,1 R je Trade im Test); am Gesamtergebnis ändert das nichts.
 
-**Belastbare Ergebnisse aus Lauf 1** – der **Testzeitraum** war von beiden Fehlern nicht betroffen (Gold
-05.12.2022–16.10.2026, Bitcoin 14.01.2025–18.10.2026; lückenlose Daten, Margin korrekt):
+#### Ergebnis je Markt und Zeitrahmen (konservative Kosten, 0,25 % Risiko)
 
-| Markt | TF | Strategien mit ≥ 20 Test-Trades | davon netto > 0 (konservativ) | Median Erwartungswert je Trade (R), konservativ | dto. Basis-Kosten | Median Mindestlot-Ausfall |
+| Markt | TF | Strategien mit ≥ 20 Test-Trades | davon profitabel | Median Erwartungswert je Trade (R) | dto. Basis-Kosten | Kerzen mit machbarem 1,5-ATR-Stop |
 |---|---|---|---|---|---|---|
-| BTCUSD | M1 | 12 | 0 | −0,82 | −0,37 | 89 % |
-| BTCUSD | M5 | 12 | 0 | −0,45 | −0,15 | 82 % |
-| BTCUSD | M15 | 7 | 0 | −0,40 | −0,06 | 94 % |
-| BTCUSD | M30 | 3 | 0 | −0,45 | −0,24 | 99 % |
-| BTCUSD | H1 | 3 | 0 | −0,37 | −0,18 | 100 % |
-| XAUUSD | M1 | 12 | 0 | −0,51 | −0,32 | 89 % |
-| XAUUSD | M5 | 12 | 0 | −0,35 | −0,22 | 88 % |
-| XAUUSD | M15 | 8 | 0 | −0,31 | −0,25 | 95 % |
-| XAUUSD | M30 | 5 | 1 (26 Trades) | −0,28 | −0,10 | 99 % |
-| XAUUSD | H1 | 2 | 0 | −0,27 | −0,25 | 100 % |
+| XAUUSD | M1 | 10 | 0 | −0,27 | −0,07 | 62 % |
+| XAUUSD | M5 | 4 | 0 | −0,36 | −0,15 | 11 % |
+| XAUUSD | M15 | 3 | 0 | −0,34 | −0,11 | 0,1 % |
+| XAUUSD | M30 | 1 | 0 | −0,56 | −0,29 | 0 % |
+| XAUUSD | H1 | 0 | – | – | – | 0 % |
+| BTCUSD | M1 | 12 | 0 | −0,82 | −0,40 | 99 % |
+| BTCUSD | M5 | 12 | 0 | −0,50 | −0,15 | 79 % |
+| BTCUSD | M15 | 9 | 0 | −0,42 | −0,06 | 34 % |
+| BTCUSD | M30 | 3 | 0 | −0,45 | −0,16 | 12 % |
+| BTCUSD | H1 | 3 | 0 | −0,34 | −0,16 | 2 % |
 
-Erkenntnisse:
+Walk-Forward (stitched Out-of-Sample im Training, 0,25 % Risiko): nur **4 von 88** Kombinationen mit ≥ 50 Trades
+hatten einen positiven Erwartungswert (BTCUSD M30 EMA-Trend, BTCUSD M30 und H1 Donchian-Breakout, XAUUSD M5
+EMA-Trend), keine mit mehr als 50 % positiven Abschnitten.
 
-- **Keine Kante nach Kosten:** Im Testzeitraum ist der Erwartungswert in allen Zeitrahmen negativ – auch im
-  Basis-Szenario ohne Kommission. Je kürzer der Zeitrahmen, desto stärker (M1: −0,5 bis −0,8 R je Trade), weil
-  Spread und Slippage im Verhältnis zum Stop-Abstand wachsen. **M5 und M15 sind für kurzfristigen automatisierten
-  Handel mit diesen Regeln nach Kosten nicht geeignet**; M1 noch weniger.
-- **Mindestlot ist bei 1 000 € und 0,25 % die harte Grenze.** Max. Stopabstand bei 0,01 Lot: Gold 2,81 USD,
-  Bitcoin 281 USD. Anteil der Kerzen im Testzeitraum, bei denen ein 1,5-ATR-Stop überhaupt erlaubt ist:
+#### Ranglisten
 
-  | | M1 | M5 | M15 | M30 | H1 |
-  |---|---|---|---|---|---|
-  | XAUUSD | 82 % | 49 % | 18 % | 3 % | 0 % |
-  | BTCUSD | 98 % | 78 % | 33 % | 12 % | 2 % |
+Keine Kombination erfüllt die Qualitätsanforderungen. Die vorderen Plätze entstehen fast nur durch sehr wenige
+Trades (Rang 1 Bitcoin: 2 Validierungs- und 0 Test-Trades) und sind **nicht aussagekräftig**:
 
-  Höhere Zeitrahmen – auf denen Kosten weniger ins Gewicht fallen – sind mit 2,50 € Risiko praktisch nicht handelbar.
-  Die hohen Ausfallquoten in der Ergebnistabelle entstehen zusätzlich, weil das Konto bei Verluststrategien
-  schrumpft und 0,25 % davon noch kleiner werden.
-- **Berechnungen stimmen mit MT5 überein** (`--mt5-abgleich`): Gewinn und Margin für 0,01/0,1/1 Lot, Kauf und
-  Verkauf, Abweichung ≤ 0,05 % (bei Kleinstbeträgen bis 0,2 % durch Cent-Rundung von MT5).
+| Markt | Rang | TF | Strategie | Validierung (Trades / € / PF) | Test (Trades / € / PF) | Hauptgrund |
+|---|---|---|---|---|---|---|
+| XAUUSD | 1 | H1 | fvg_retrace | 56 / +2,88 / 1,04 | 5 / +2,30 / 1,31 | PF < 1,2; Walk-Forward negativ |
+| XAUUSD | 2 | M30 | fvg_retrace | 80 / −14,13 / 0,87 | 7 / −9,24 / 0,24 | Erwartungswert < 0 |
+| XAUUSD | 3 | H1 | smc_orderblock | 79 / −25,78 / 0,78 | 7 / −0,31 / 0,97 | Erwartungswert < 0 |
+| BTCUSD | 1 | H1 | kombi_breakout_momentum | 2 / +10,93 / – | 0 / – / – | zu wenige Trades (Mindestlot) |
+| BTCUSD | 2 | M30 | rsi_mean_reversion | 1 / −2,65 / – | 1 / +0,69 / – | zu wenige Trades |
+| BTCUSD | 3 | H1 | momentum | 5 / −4,72 / 0,34 | 1 / +3,69 / – | zu wenige Trades |
 
-### Lauf 2 (nach den Korrekturen)
+Vollständige Ranglisten, alle Kennzahlen (Nettogewinn, Drawdown, Profitfaktor, Trefferquote, Erwartungswert,
+t-Wert, Sharpe, Haltedauer, Jahresergebnisse, Kosten) in `docs/phase3_zusammenfassung.json`.
 
-*Ausstehend.* Ein erster Versuch erzeugte keinen Bericht (Fehlerausgabe liegt nicht vor). Der Backtest fängt Fehler
-jetzt je Strategie und Zeitrahmen ab, schreibt den Bericht trotzdem und protokolliert alle Ausgaben in
-`reports/phase3_log_*.txt`.
+#### Gold gegen Bitcoin
+
+| | XAUUSD | BTCUSD |
+|---|---|---|
+| Kosten je Trade im Verhältnis zum Risiko | geringer (M1: −0,07 R schon ohne Kommission) | höher auf M1/M5 (Spread ≈ 17 USD) |
+| Mindestlot-Grenze (2,50 € Risiko) | Stop max. 2,81 USD – ab M5 meist zu eng | Stop max. 281 USD – bis M5 meist machbar |
+| bester Zeitrahmen (am wenigsten negativ) | M1 (−0,27 R) | H1 (−0,34 R) |
+| einzige Gruppe mit positiven Vorzeichen | – | Trendfolge M30/H1 (siehe unten) |
+
+#### Forschungskandidat (nicht qualifiziert): Bitcoin-Trendfolge auf M30/H1
+
+Nur zum Vergleich wurden die mit 0,25 % gewählten Parameter auch mit 1 % Risiko gerechnet (bei 0,25 % verhindert der
+Mindestlot fast alle Trades). Dabei zeigte eine Strategiegruppe als einzige positive Vorzeichen in Walk-Forward,
+Validierung und Test:
+
+| BTCUSD, 1 % Risiko | Validierung (Trades / € / PF / DD) | Test (Trades / € / PF / DD) | t-Wert Val / Test | Long-Anteil |
+|---|---|---|---|---|
+| H1 kombi_breakout_momentum (n 55, rr 3) | 57 / +276 / 1,97 / 5,6 % | 40 / +264 / 2,38 / 5,4 % | 2,4 / 2,4 | 81 % / 60 % |
+| H1 donchian_breakout (n 55, 2,5 ATR) | 227 / +544 / 1,33 / 15,0 % | 142 / +298 / 1,33 / 17,5 % | 1,2 / 1,0 | 58 % / 55 % |
+| H1 ema_trend (50/200, 3 ATR) | 49 / +311 / 1,90 / 7,5 % | 30 / +212 / 2,27 / 7,6 % | 1,1 / 1,0 | 53 % / 47 % |
+| M30 ema_trend (50/200, 3 ATR) | 111 / +152 / 1,20 / 16,6 % | 97 / +282 / 1,47 / 10,5 % | 0,6 / 0,8 | 51 % / 49 % |
+
+Warum das **kein** Nachweis ist: (1) nachträglich aus 120 Kombinationen und einem nicht vorgegebenen Risikomodell
+herausgesucht (Mehrfachtest-Problem); (2) t-Werte überwiegend um 1 (statistisch nicht von Zufall unterscheidbar),
+nur eine Kombination mit t ≈ 2,4 bei 40–57 Trades; (3) Drawdown über der 5-%-Grenze; (4) auch bei 1 % fallen
+48–67 % der Test-Trades wegen der Mindestlotgröße weg – ausgeführt werden vor allem Trades mit kleinem Stop, was die
+Ergebnisse verzerren kann; (5) Walk-Forward nur 40–50 % positive Abschnitte. Der Long-Anteil von 47–60 % spricht
+immerhin gegen einen reinen Aufwärtstrend-Effekt.
+
+#### Risikokennzahlen und Mindestlot
+
+Kapitalbedarf, damit ein Stop von 1,5 ATR (Testzeitraum) bei 0,25 % Risiko mit 0,01 Lot möglich ist:
+
+| | M15 | M30 | H1 |
+|---|---|---|---|
+| XAUUSD (ATR 7,1 / 10,5 / 15,5 USD) | ≈ 3 800 € | ≈ 5 600 € | ≈ 8 300 € |
+| BTCUSD (ATR 232 / 340 / 498 USD) | ≈ 1 200 € | ≈ 1 800 € | ≈ 2 700 € |
+
+Mit 1 000 € und 0,25 % Risiko sind nur M1/M5 überhaupt handelbar – dort zerstören Spread und Slippage den
+Erwartungswert. Die höheren Zeitrahmen, auf denen die Kosten weniger ins Gewicht fallen, scheitern am Mindestlot.
+
+#### Prüfung gegen MT5
+
+`--mt5-abgleich` (Lauf 2): Gewinn und Margin für 0,01 / 0,1 / 1 Lot, Kauf und Verkauf, max. Abweichung 0,31 %
+(Cent-Rundung von MT5 bei Kleinstbeträgen); bei 1 Lot ≤ 0,02 %.
+
+### Lauf 1 (18.10.2026, 14:01 UTC) – überholt
+
+Lauf 1 hatte zwei inzwischen behobene Fehler (Gold-Training in praktisch leeren Daten vor 2018, BTC-Margin vor 2021
+ohne Kurs). Seine Testergebnisse (keine profitable Strategie) werden von Lauf 2 bestätigt.
+
+### Erkannte Schwachstellen
+
+1. **Daten:** Gold-Intraday erst ab 2018 dicht – Training nur ~5 Jahre, Test ~1,7 Jahre. Kerzen-Spreads aus MT5 sind
+   eher optimistisch (geringster Spread je Kerze); Kommission/Slippage sind Annahmen.
+2. **Kapital/Mindestlot:** dominiert alle Ergebnisse auf M15–H1; viele Signale werden gar nicht gehandelt.
+3. **Strategien:** Alle Regeln arbeiten mit Market-Einstiegen zur nächsten Eröffnung; Limit-Einstiege (z. B. am FVG
+   oder Order Block) würden Kosten senken, sind aber nicht umgesetzt. Stops auf Basis einzelner Kerzen sind auf
+   M1/M5 im Verhältnis zum Spread zu eng.
+4. **Statistik:** 120 Kombinationen bedeuten Mehrfachtests; einzelne gute Werte sind zu erwarten, auch ohne Kante.
+5. **Technik:** Speichermangel bei M1 mit 2 Prozessen (2 Kombinationen fehlen); Swap mit aktuellen Werten für die
+   gesamte Historie (historische unbekannt); Drawdown nur auf realisierter Basis.
 
 ## Empfehlung für Phase 4
 
-*Ausstehend – nach Lauf 2. Absehbar ist bereits: Mit den getesteten Regeln, 1 000 € Kapital und 0,25 % Risiko
-erfüllt keine Strategie die Qualitätsanforderungen; Demohandel mit einer dieser Strategien wäre nach den Daten
-nicht begründet.*
+**Kein Demohandel mit einer der getesteten Strategien.** Keine erfüllt die Anforderungen; die Daten sprechen bei
+1 000 € und 0,25 % Risiko gegen jede von ihnen.
+
+Vorschlag für Phase 4 (zur Entscheidung):
+
+1. **Streamlit-Dashboard** auf Basis von `phase3_ergebnisse.json` und der Datenbasis (Ergebnisse, Drawdown,
+   Datenqualität) – unabhängig von einer handelbaren Strategie sinnvoll.
+2. **Beobachtungsmodus statt Handel:** Die Bitcoin-Trendfolge-Kandidaten (H1/M30) laufen live mit, Signale werden nur
+   protokolliert („Paper-Trading“, keine Orders). Das ist ein echter, unverfälschter Forward-Test auf neuen Daten.
+3. **Grundsatzentscheidung zu Kapital und Risiko** (deine Entscheidung): Mit 1 000 € sind Gold-Intraday und
+   Bitcoin ab M30 bei 0,25 % praktisch nicht handelbar. Alternativen: höheres Demokapital (z. B. 3 000–10 000 €),
+   höheres Risiko je Trade (z. B. 1 %, dann mit entsprechend größerem Drawdown) oder ein Broker/Konto mit kleinerer
+   Mindestlotgröße.
+4. Optional Strategie-Weiterentwicklung (Limit-Einstiege, Kostenfilter, Zeitfilter) – mit vorab festgelegter
+   Hypothese und Bewertung auf neuen Daten, um Überanpassung zu vermeiden.
