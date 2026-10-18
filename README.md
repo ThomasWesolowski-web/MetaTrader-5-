@@ -7,7 +7,7 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 
 | Phase | Inhalt | Status |
 |---|---|---|
-| 1 | System prüfen, MT5-Verbindung, Symbole, Bid/Ask, Historie, Prüfbericht | ✅ Skript fertig – Lauf auf Windows-PC ausstehend |
+| 1 | System prüfen, MT5-Verbindung, Symbole, Bid/Ask, Historie, Prüfbericht | ✅ abgeschlossen – [Ergebnis](docs/phase1_ergebnis.md) |
 | 2+ | Daten, Backtests, Strategieauswahl, Demo-Handel, Streamlit-Dashboard | ⏸ wartet auf Freigabe |
 
 ## Phase 1 auf dem Windows-PC ausführen
