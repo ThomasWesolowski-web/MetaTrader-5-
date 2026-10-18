@@ -16,6 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .. import features
 from .. import indicators as ind
 from .base import Signals, TradeStrategy, register
 
@@ -24,11 +25,9 @@ STOP_BUFFER_ATR = 0.1   # Puffer jenseits des Strukturpunkts, damit der Stop nic
 
 
 def _arrays(bars: pd.DataFrame):
-    o = bars["open"].to_numpy(dtype=float)
-    h = bars["high"].to_numpy(dtype=float)
-    l = bars["low"].to_numpy(dtype=float)
-    c = bars["close"].to_numpy(dtype=float)
-    return o, h, l, c, ind.atr(h, l, c, ATR_N)
+    """Kurse und ATR aus dem gemeinsamen Indikator-Speicher (schreibgeschützt – nicht verändern)."""
+    f = features.get(bars)
+    return f.o, f.h, f.l, f.c, f.atr(ATR_N)
 
 
 def _rr_target(c, idx, d, stop, rr):
@@ -56,8 +55,8 @@ class SmcOrderBlock(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        sh, sl, _, _ = ind.swing_points(h, l, p["k"])
-        bos_up, bos_dn, _, _, _ = ind.market_structure(c, sh, sl)
+        f = features.get(bars)
+        bos_up, bos_dn, _, _, _ = f.structure(p["k"])
         n = len(c)
         pos = np.arange(n, dtype=float)
         out_i, out_d, out_s = [], [], []
@@ -90,8 +89,9 @@ class IctSilverBullet(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        kz = ind.in_session(pd.DatetimeIndex(bars["time"]), list(p["windows"]))
-        bull, bear, bottom, top = ind.fair_value_gaps(h, l, a, p["min_fvg"])
+        f = features.get(bars)
+        kz = f.session(p["windows"])
+        bull, bear, bottom, top = f.fvg(p["min_fvg"], ATR_N)
         l2 = np.concatenate([[np.nan, np.nan], np.fmin(l[:-2], l[1:-1])])
         h2 = np.concatenate([[np.nan, np.nan], np.fmax(h[:-2], h[1:-1])])
         out_i, out_d, out_s = [], [], []
@@ -131,7 +131,7 @@ class LiquiditySweep(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        up, dn = self.sweeps(h, l, c, p["k"])
+        up, dn = features.get(bars).sweeps(p["k"])
         iu, idn = np.nonzero(up)[0], np.nonzero(dn)[0]
         idx = np.concatenate([iu, idn])
         d = np.concatenate([np.ones(len(iu), int), -np.ones(len(idn), int)])
@@ -153,8 +153,9 @@ class FvgRetrace(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        e200 = ind.ema(c, p["trend_ema"])
-        bull, bear, bottom, top = ind.fair_value_gaps(h, l, a, p["min_fvg"])
+        f = features.get(bars)
+        e200 = f.ema(p["trend_ema"])
+        bull, bear, bottom, top = f.fvg(p["min_fvg"], ATR_N)
         out_i, out_d, out_s = [], [], []
         with np.errstate(invalid="ignore"):
             masks = ((1, bull & (c > e200)), (-1, bear & (c < e200)))
@@ -180,8 +181,9 @@ class MarketStructureShift(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        sh, sl, _, _ = ind.swing_points(h, l, p["k"])
-        _, _, _, mss_up, mss_dn = ind.market_structure(c, sh, sl)
+        f = features.get(bars)
+        sh, sl, _, _ = f.swings(p["k"])
+        _, _, _, mss_up, mss_dn = f.structure(p["k"])
         iu, idn = np.nonzero(mss_up)[0], np.nonzero(mss_dn)[0]
         idx = np.concatenate([iu, idn])
         d = np.concatenate([np.ones(len(iu), int), -np.ones(len(idn), int)])
@@ -212,11 +214,12 @@ class DonchianBreakout(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        up, dn = self.breakouts(h, l, c, p["n"])
+        f = features.get(bars)
+        up, dn = f.breakouts(p["n"])
         m = max(2, p["n"] // 2)
         with np.errstate(invalid="ignore"):
-            ex_l = c < ind.rolling_min_prev(l, m)
-            ex_s = c > ind.rolling_max_prev(h, m)
+            ex_l = c < f.min_prev_low(m)
+            ex_s = c > f.max_prev_high(m)
         iu, idn = np.nonzero(up)[0], np.nonzero(dn)[0]
         idx = np.concatenate([iu, idn])
         d = np.concatenate([np.ones(len(iu), int), -np.ones(len(idn), int)])
@@ -238,7 +241,8 @@ class EmaTrend(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        f, s_ = ind.ema(c, p["fast"]), ind.ema(c, p["slow"])
+        fe = features.get(bars)
+        f, s_ = fe.ema(p["fast"]), fe.ema(p["slow"])
         with np.errstate(invalid="ignore"):
             above = f > s_
         prev = np.concatenate([[False], above[:-1]])
@@ -265,8 +269,9 @@ class RsiMeanReversion(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        r = ind.rsi(c, p["rsi_n"])
-        e = ind.ema(c, p["trend_ema"])
+        fe = features.get(bars)
+        r = fe.rsi(p["rsi_n"])
+        e = fe.ema(p["trend_ema"])
         rp = np.concatenate([[np.nan], r[:-1]])
         with np.errstate(invalid="ignore"):
             up = (r < p["lower"]) & (rp >= p["lower"]) & (c > e)
@@ -300,9 +305,10 @@ class Momentum(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        m = self.score(c, a, p["n"])
+        fe = features.get(bars)
+        m = fe.momentum(p["n"], ATR_N)
         mp = np.concatenate([[np.nan], m[:-1]])
-        e = ind.ema(c, p["ema"])
+        e = fe.ema(p["ema"])
         with np.errstate(invalid="ignore"):
             up = (m > p["z"]) & (mp <= p["z"]) & (c > e)
             dn = (m < -p["z"]) & (mp >= -p["z"]) & (c < e)
@@ -326,9 +332,9 @@ class KombiSweepMss(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        sw_up, sw_dn = LiquiditySweep.sweeps(h, l, c, p["k"])
-        sh, sl, _, _ = ind.swing_points(h, l, p["k"])
-        _, _, _, mss_up, mss_dn = ind.market_structure(c, sh, sl)
+        fe = features.get(bars)
+        sw_up, sw_dn = fe.sweeps(p["k"])
+        _, _, _, mss_up, mss_dn = fe.structure(p["k"])
         n = len(c)
         pos = np.arange(n, dtype=float)
         out_i, out_d, out_s = [], [], []
@@ -357,8 +363,9 @@ class KombiTrendRsi(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        e20, e50, e200 = ind.ema(c, 20), ind.ema(c, 50), ind.ema(c, 200)
-        r = ind.rsi(c, 2)
+        fe = features.get(bars)
+        e20, e50, e200 = fe.ema(20), fe.ema(50), fe.ema(200)
+        r = fe.rsi(2)
         rp = np.concatenate([[np.nan], r[:-1]])
         hi = 100 - p["lower"]
         with np.errstate(invalid="ignore"):
@@ -384,13 +391,14 @@ class KombiBreakoutMomentum(TradeStrategy):
     def entries(self, bars):
         p = self.params
         o, h, l, c, a = _arrays(bars)
-        up, dn = DonchianBreakout.breakouts(h, l, c, p["n"])
-        m = Momentum.score(c, a, p["n"])
-        a_ema = ind.ema(a, 50)
+        fe = features.get(bars)
+        up0, dn0 = fe.breakouts(p["n"])
+        m = fe.momentum(p["n"], ATR_N)
+        a_ema = fe.ema_atr(50, ATR_N)
         with np.errstate(invalid="ignore"):
             vol_up = a > a_ema
-            up &= (m > 1) & vol_up
-            dn &= (m < -1) & vol_up
+            up = up0 & (m > 1) & vol_up      # neue Arrays – gemeinsame Arrays nicht verändern
+            dn = dn0 & (m < -1) & vol_up
         iu, idn = np.nonzero(up)[0], np.nonzero(dn)[0]
         idx = np.concatenate([iu, idn])
         d = np.concatenate([np.ones(len(iu), int), -np.ones(len(idn), int)])

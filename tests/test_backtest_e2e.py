@@ -108,11 +108,15 @@ def test_failing_strategy_does_not_abort_run(project, monkeypatch):
     der Fehler wird ausgewiesen."""
     from tradingbot.strategies.library import Momentum
 
+    # Testlauf vorher bestehen (er prüft den Programmstand, der sich durch den Monkeypatch nicht ändert)
+    assert backtest_ausfuehren.main(["--config", str(project / "config.toml"), "--zeitrahmen", "H1",
+                                     "--strategien", "ema_trend", "momentum", "--testlauf"]) == 0
+
     def boom(self, bars):
         raise ValueError("Testfehler")
     monkeypatch.setattr(Momentum, "entries", boom)
     rc = backtest_ausfuehren.main(["--config", str(project / "config.toml"), "--zeitrahmen", "H1",
-                                   "--strategien", "ema_trend", "momentum"])
+                                   "--strategien", "ema_trend", "momentum", "--neu"])
     assert rc == 1
     data = json.loads((project / "reports" / "phase3_ergebnisse.json").read_text(encoding="utf-8"))
     assert {e["strategy"] for e in data["errors"]} == {"momentum"}

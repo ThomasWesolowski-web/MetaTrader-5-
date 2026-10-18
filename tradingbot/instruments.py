@@ -139,12 +139,15 @@ class CurrencyConverter:
         self.rates = rates or {}
 
     @classmethod
-    def from_store(cls, store, symbols: list[dict], timeframes=("M5", "H1", "D1")) -> "CurrencyConverter":
+    def from_store(cls, store, symbols: list[dict], timeframes=("M5", "H1", "D1"), start=None) -> "CurrencyConverter":
+        """Kurse aus der Datenbank; start begrenzt das Laden auf den benötigten Zeitraum (ein Monat Vorlauf,
+        damit zu Beginn ein zurückliegender Kurs verfügbar ist)."""
         rates = {}
+        frm = None if start is None else pd.Timestamp(start) - pd.Timedelta(days=31)
         for s in symbols:
             parts = []
             for tf in [t for t in store.timeframes(s["symbol"]) if t in timeframes]:
-                df = store.load(s["symbol"], tf)
+                df = store.load(s["symbol"], tf, start=frm, columns=["close"])
                 if not df.empty:
                     end = pd.DatetimeIndex(df["time"]).as_unit("ns").asi8 + seconds(tf) * 10**9
                     parts.append(pd.DataFrame({"t": end, "c": df["close"].to_numpy()}))

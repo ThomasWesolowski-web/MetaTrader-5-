@@ -33,6 +33,33 @@ def build_markdown(data: dict, crosscheck: dict | None = None) -> str:
          f"- **Auswahl/Rangliste auf Kostenszenario:** `{SELECTION_SCENARIO}` · Risiko 0,25 % je Trade, "
          "max. 1 % Tagesverlust, 5 % Drawdown als Testgrenze, max. 2 Positionen, Startkapital 1 000 €", ""]
 
+    if "units_expected" in data:
+        L += ["## Vollständigkeit", "",
+              f"- **Testeinheiten abgeschlossen:** {data['units_completed']} von {data['units_expected']}"]
+        if data.get("units_missing"):
+            L.append(f"- **Fehlend ({len(data['units_missing'])}):** " + ", ".join(data["units_missing"]))
+        else:
+            L.append("- Alle vorgesehenen Märkte, Zeitrahmen und Strategien wurden getestet.")
+        L.append("")
+        L += ["## Ressourcen", "", "| Markt | TF | Kerzen | Laufzeit s | max. RAM Prozess MB | min. freier RAM MB | Blockgröße |",
+              "|---|---|---|---|---|---|---|"]
+        for j in jobs:
+            mem = [r.get("memory") or {} for r in _ok(j)]
+            pm = [m.get("process_mb") for m in mem if m.get("process_mb") is not None]
+            av = [m.get("available_mb") for m in mem if m.get("available_mb") is not None]
+            blk = sorted({r.get("block_bars") for r in _ok(j) if r.get("block_bars")})
+            rt = sum(r.get("runtime_s") or 0 for r in _ok(j))
+            L.append(f"| {j['symbol']} | {j['tf']} | {j.get('bars')} | {rt:.0f} | {max(pm) if pm else '–'} | "
+                     f"{min(av) if av else '–'} | {', '.join(f'{b:,}' for b in blk) if blk else 'ohne Blöcke'} |")
+        L.append("")
+    rc = data.get("reference_comparison")
+    if rc:
+        L += ["## Abgleich mit Lauf 2 (Reproduzierbarkeit)", "",
+              f"- Verglichene Einheiten (gleiche Zeiträume): {rc['compared']}, davon **identisch: {rc['identical']}**",
+              f"- Abweichend: {', '.join(rc['different']) if rc['different'] else 'keine'}",
+              f"- Nicht verglichen, weil sich die Zeiträume (Daten) geändert haben: "
+              f"{', '.join(rc['skipped_changed_periods']) if rc['skipped_changed_periods'] else 'keine'}", ""]
+
     L += ["## Zeiträume (Training / Validierung / Test)", "", "| Markt | Training | Validierung | Test |", "|---|---|---|---|"]
     seen = set()
     for j in jobs:

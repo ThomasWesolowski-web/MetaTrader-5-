@@ -1,8 +1,9 @@
 # Phase 3 – Strategieentwicklung, Backtesting und Strategieauswahl
 
 **Stand:** 18.10.2026 · **Nur Simulation:** keine Orders an MetaTrader 5, keine Demo- oder Echtgeld-Trades
-**Status:** abgeschlossen. 138 Tests bestanden; Backtest-Lauf 2 mit echten Vantage-Daten (18.10.2026, 15:00 UTC).
-**Ergebnis: Für XAUUSD und BTCUSD ist aktuell keine Strategie für den Demohandel geeignet.**
+**Status:** Lauf 2 ausgewertet, **Lauf 3 (Hardware-Modus, alle 120 Einheiten) steht aus**. 160 Tests bestanden.
+**Vorläufiges Ergebnis (Lauf 2, 118/120 Einheiten): Für XAUUSD und BTCUSD ist keine Strategie für den Demohandel
+geeignet.** Fehlend: XAUUSD M1 `liquidity_sweep` und `smc_orderblock` (Speichermangel) – werden in Lauf 3 nachgeholt.
 Maschinenlesbar: `docs/phase3_zusammenfassung.json` (kompakt, für das Dashboard) bzw. vollständig
 `reports/phase3_ergebnisse.json` auf dem PC.
 
@@ -116,6 +117,28 @@ das Ergebnis ausdrücklich: **aktuell keine Strategie für den Demohandel geeign
    weiteren Trades als „max. Positionen“ blockiert. Reproduziert (531 statt 2 590 Trades), behoben, Regressionstest.
 2. **Momentum-Schwellen** (z = 2,5) praktisch nie erreicht, weil die ATR Dochte enthält; Raster auf 1,0/1,75.
 3. Zeitstempel werden für die Ereignissortierung als int64 verarbeitet (Objekt-Zeitstempel sind dafür ungeeignet).
+
+## 9. Hardware-Modus (8 GB RAM, Windows 10)
+
+Seit Lauf 3 sind die Backtests verbindlich an den PC angepasst:
+
+| Vorgabe | Umsetzung |
+|---|---|
+| 1 Prozess | `--prozesse` Standard 1; mehr nur, wenn je Prozess ≥ 2,5 GB RAM frei sind, sonst automatisch 1 |
+| M1 in Blöcken | Signale in Blöcken zu 100.000 Kerzen (+10.000 Vorlauf, damit Indikatoren identisch sind); bei `MemoryError` oder < 1,5 GB freiem RAM wird der Block halbiert (Minimum 10.000) |
+| Nur Nötiges laden | je Einheit nur ein Markt, ab dem dichten Datenbeginn, nur Spalten open/high/low/close/spread; Umrechnungskurse nur `close` |
+| Märkte nacheinander | Gold, danach Bitcoin; ein Zeitrahmen nach dem anderen |
+| Indikatoren einmal | gemeinsamer, schreibgeschützter Indikator-Speicher je Block (ATR, EMA, RSI, Swings, FVG …) |
+| Fortsetzung | nach jeder Einheit (Markt × Zeitrahmen × Strategie) Prüfpunkt in `reports/phase3_pruefpunkte`; beim nächsten Start nur Fehlendes; Prüfpunkte werden bei geändertem Code, geänderten Daten oder Einstellungen verworfen |
+| Protokoll | RAM (Prozess und frei), Laufzeit, Fortschritt mit Restzeit, Fehler in `reports/phase3_log_*.txt`; im Bericht Abschnitte „Vollständigkeit“ und „Ressourcen“ |
+| Testlauf zuerst | ohne bestandenen Testlauf startet kein voller Lauf: (1) Blockberechnung = Gesamtberechnung auf den letzten 150.000 Kerzen des feinsten Zeitrahmens, alle Strategien und Parameter; (2) alle H1-Einheiten; (3) zweiter Durchgang liefert identische Ergebnisse |
+| Nichts überspringen | alle 5 Zeitrahmen × 12 Strategien × 2 Märkte; fehlende Einheiten werden im Bericht einzeln genannt |
+
+Nachweis der Gleichheit (Tests in `tests/test_blocks_and_cache.py`): Für alle 12 Strategien und alle Parameter sind
+die Signale blockweise identisch zur Gesamtberechnung; die Signale aller 48 Parameterkombinationen sind mit dem
+Indikator-Speicher identisch zum Code von Lauf 2 (97.864 Signale); Backtest-Ergebnisse mit und ohne Blöcke sowie nach
+einem simulierten Abbruch mit Fortsetzung sind identisch. Lauf 3 vergleicht seine Ergebnisse zusätzlich mit Lauf 2
+(Abschnitt „Abgleich mit Lauf 2“).
 
 ## Datenqualität (erneute Prüfung)
 

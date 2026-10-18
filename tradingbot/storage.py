@@ -102,8 +102,14 @@ class MarketStore:
         self.upsert(symbol, tf, df)
 
     # ------------------------------------------------------------------ Lesen
-    def load(self, symbol: str, tf: str, start=None, end=None) -> pd.DataFrame:
-        """Kerzen im UTC-Zeitraum [start, end) laden (sortiert nach Zeit)."""
+    def load(self, symbol: str, tf: str, start=None, end=None, columns: list[str] | None = None) -> pd.DataFrame:
+        """Kerzen im UTC-Zeitraum [start, end) laden (sortiert nach Zeit).
+
+        Speichersparend: Es werden nur die Jahresdateien im Zeitraum und nur die angegebenen Spalten gelesen
+        ("time" und "time_server" werden für Sortierung und Filter immer mitgelesen)."""
+        cols = None
+        if columns is not None:
+            cols = ["time", "time_server"] + [c for c in columns if c not in ("time", "time_server")]
         files = self._files(symbol, tf)
         if start is not None:
             start = pd.Timestamp(start, tz="UTC") if pd.Timestamp(start).tzinfo is None else pd.Timestamp(start)
@@ -112,8 +118,10 @@ class MarketStore:
             end = pd.Timestamp(end, tz="UTC") if pd.Timestamp(end).tzinfo is None else pd.Timestamp(end)
             files = [f for f in files if int(f.stem) <= end.year]
         if not files:
-            return pd.DataFrame({c: pd.Series(dtype=DTYPES.get(c, "datetime64[ns, UTC]")) for c in COLUMNS})
-        df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+            return pd.DataFrame({c: pd.Series(dtype=DTYPES.get(c, "datetime64[ns, UTC]")) for c in (cols or COLUMNS)})
+        parts = [pd.read_parquet(f, columns=cols) for f in files]
+        df = parts[0] if len(parts) == 1 else pd.concat(parts, ignore_index=True)
+        del parts
         df = df.sort_values("time_server").reset_index(drop=True)
         if start is not None:
             df = df[df["time"] >= start]

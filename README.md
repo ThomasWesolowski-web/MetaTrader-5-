@@ -1,7 +1,7 @@
 # Trading-Software Gold & Bitcoin (MetaTrader 5)
 
 Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schrittweise entwickelt wird.
-**Aktueller Stand: Phase 2 – Datenbasis. Es werden keine Trades ausgeführt.**
+**Aktueller Stand: Phase 3 – Backtests. Es werden keine Trades ausgeführt.**
 
 ## Phasen
 
@@ -9,18 +9,26 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 |---|---|---|
 | 1 | System prüfen, MT5-Verbindung, Symbole, Bid/Ask, Historie, Prüfbericht | ✅ abgeschlossen – [Ergebnis](docs/phase1_ergebnis.md) |
 | 2 | Datenbasis: Import, Parquet-Speicher, UTC, Qualitätsprüfung, EUR-Risikorechnung | ✅ umgesetzt – [Ergebnis](docs/phase2_ergebnis.md) |
-| 3 | Strategiebibliothek, Backtests, Walk-Forward, Strategieauswahl | ✅ abgeschlossen – keine Strategie geeignet ([Ergebnis](docs/phase3_ergebnis.md)) |
+| 3 | Strategiebibliothek, Backtests, Walk-Forward, Strategieauswahl | 🔄 Lauf 3 (Hardware-Modus) ausstehend – bisher keine Strategie geeignet ([Ergebnis](docs/phase3_ergebnis.md)) |
 | 4+ | Demo-Handel, Streamlit-Dashboard | ⏸ wartet auf Freigabe |
 
 ## Phase 3: Backtests (nur Simulation)
 
 ```bat
 python daten_aktualisieren.py
-python backtest_ausfuehren.py --prozesse 2 --mt5-abgleich
+python backtest_ausfuehren.py --testlauf
+python backtest_ausfuehren.py --mt5-abgleich
 ```
 
-Ergebnis: `reports\phase3_bericht_*.md` und maschinenlesbar `reports\phase3_ergebnisse.json` (für das Dashboard).
-Optionen: `--zeitrahmen M5 M15`, `--strategien ema_trend mss`, `--symbole XAUUSD`.
+Ausgelegt für 8 GB RAM: 1 Prozess, Märkte nacheinander, M1 in Blöcken. Der volle Lauf startet erst nach bestandenem
+Testlauf (fehlt er, wird er automatisch zuerst ausgeführt). Nach einem Abbruch setzt derselbe Befehl fort.
+
+Ergebnis: `reports\phase3_bericht_*.md`, maschinenlesbar `reports\phase3_ergebnisse.json`, Protokoll
+`reports\phase3_log_*.txt`, Prüfpunkte in `reports\phase3_pruefpunkte\`.
+
+Alle Optionen (`python backtest_ausfuehren.py --help`): `--symbole`, `--zeitrahmen`, `--strategien`,
+`--prozesse` (Standard 1), `--blockgroesse` (Standard 100000, Minimum 10000), `--testlauf`, `--neu`
+(Prüfpunkte verwerfen), `--mt5-abgleich`, `--config`.
 
 ## Phase 2: Datenbasis aufbauen und aktualisieren
 
