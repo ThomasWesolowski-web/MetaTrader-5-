@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import time
+import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict
 
@@ -112,73 +113,78 @@ def run_job(cfg: Config, symbol: str, tf: str, strategy_names: list[str] | None 
     names = strategy_names or trade_strategies()
     results = []
     for name in names:
-        ts0 = time.time()
-        cls = strategy_base._REGISTRY[name]
-        grid = cls.param_grid or [{}]
-        raw: dict[str, dict[int, tuple]] = {k: {} for k in scen}
-        n_signals = {}
-        for pi, params in enumerate(grid):
-            strat = create(name, **params)
-            sig = strat.entries(bars)
-            n_signals[pi] = len(sig)
+        try:
+            ts0 = time.time()
+            cls = strategy_base._REGISTRY[name]
+            grid = cls.param_grid or [{}]
+            raw: dict[str, dict[int, tuple]] = {k: {} for k in scen}
+            n_signals = {}
+            for pi, params in enumerate(grid):
+                strat = create(name, **params)
+                sig = strat.entries(bars)
+                n_signals[pi] = len(sig)
+                for sk in scen:
+                    raw[sk][pi] = simulate(bars, sig, tf_s, spreads[sk], scen[sk].slippage_frac, rules.max_positions)
+
+            # ---- Walk-Forward im Trainingszeitraum (Auswahl je Fenster nur In-Sample)
+            sel = raw[SELECTION_SCENARIO]
+            folds, oos_parts, chosen = [], [], []
+            for is_a, is_b, oos_a, oos_b in wf_windows(periods.start, periods.train_end):
+                scores = {pi: objective(metrics(slice_trades(sel[pi][0], is_a, is_b, True), SELECTION_SCENARIO,
+                                                is_a, is_b)[0]) for pi in sel}
+                best = max(scores, key=lambda k: scores[k])
+                if not math.isfinite(scores[best]):
+                    folds.append({"oos": [str(oos_a)[:10], str(oos_b)[:10]], "params": None, "net_eur": None})
+                    continue
+                part = slice_trades(sel[best][0], oos_a, oos_b)
+                fm, _ = metrics(part, SELECTION_SCENARIO, oos_a, oos_b)
+                folds.append({"oos": [str(oos_a)[:10], str(oos_b)[:10]], "params": grid[best],
+                              "net_eur": fm["net_profit_eur"], "trades": fm["trades"]})
+                oos_parts.append(part)
+                chosen.append(best)
+            if oos_parts:
+                stitched = pd.concat(oos_parts).sort_values("entry_time").reset_index(drop=True)
+                wf_m, _ = metrics(stitched, SELECTION_SCENARIO, periods.start, periods.train_end)
+            else:
+                wf_m = None
+            valid_folds = [f for f in folds if f["net_eur"] is not None]
+            wf_pos = (100 * sum(1 for f in valid_folds if f["net_eur"] > 0) / len(valid_folds)) if valid_folds else None
+
+            # ---- Endgültige Parameterwahl auf dem gesamten Trainingszeitraum
+            tr_a, tr_b = periods.window("train")
+            tr_scores = {pi: objective(metrics(slice_trades(sel[pi][0], tr_a, tr_b, True), SELECTION_SCENARIO,
+                                               tr_a, tr_b)[0]) for pi in sel}
+            best = max(tr_scores, key=lambda k: tr_scores[k])
+
+            evals = {}
             for sk in scen:
-                raw[sk][pi] = simulate(bars, sig, tf_s, spreads[sk], scen[sk].slippage_frac, rules.max_positions)
-
-        # ---- Walk-Forward im Trainingszeitraum (Auswahl je Fenster nur In-Sample)
-        sel = raw[SELECTION_SCENARIO]
-        folds, oos_parts, chosen = [], [], []
-        for is_a, is_b, oos_a, oos_b in wf_windows(periods.start, periods.train_end):
-            scores = {pi: objective(metrics(slice_trades(sel[pi][0], is_a, is_b, True), SELECTION_SCENARIO,
-                                            is_a, is_b)[0]) for pi in sel}
-            best = max(scores, key=lambda k: scores[k])
-            if not math.isfinite(scores[best]):
-                folds.append({"oos": [str(oos_a)[:10], str(oos_b)[:10]], "params": None, "net_eur": None})
-                continue
-            part = slice_trades(sel[best][0], oos_a, oos_b)
-            fm, _ = metrics(part, SELECTION_SCENARIO, oos_a, oos_b)
-            folds.append({"oos": [str(oos_a)[:10], str(oos_b)[:10]], "params": grid[best],
-                          "net_eur": fm["net_profit_eur"], "trades": fm["trades"]})
-            oos_parts.append(part)
-            chosen.append(best)
-        if oos_parts:
-            stitched = pd.concat(oos_parts).sort_values("entry_time").reset_index(drop=True)
-            wf_m, _ = metrics(stitched, SELECTION_SCENARIO, periods.start, periods.train_end)
-        else:
-            wf_m = None
-        valid_folds = [f for f in folds if f["net_eur"] is not None]
-        wf_pos = (100 * sum(1 for f in valid_folds if f["net_eur"] > 0) / len(valid_folds)) if valid_folds else None
-
-        # ---- Endgültige Parameterwahl auf dem gesamten Trainingszeitraum
-        tr_a, tr_b = periods.window("train")
-        tr_scores = {pi: objective(metrics(slice_trades(sel[pi][0], tr_a, tr_b, True), SELECTION_SCENARIO,
-                                           tr_a, tr_b)[0]) for pi in sel}
-        best = max(tr_scores, key=lambda k: tr_scores[k])
-
-        evals = {}
-        for sk in scen:
-            evals[sk] = {}
-            for per in ("train", "validation", "test"):
-                a, b = periods.window(per)
-                m, _ = metrics(slice_trades(raw[sk][best][0], a, b), sk, a, b, raw_skipped=None)
-                evals[sk][per] = m
-        risk_var = {}
-        for rv in RISK_VARIANTS:
-            r = RiskRules(risk_per_trade=rv)
-            risk_var[f"{rv * 100:g}%"] = {
-                per: metrics(slice_trades(sel[best][0], *periods.window(per)), SELECTION_SCENARIO,
-                             *periods.window(per), r=r)[0] for per in ("validation", "test")}
-        results.append({
-            "strategy": name, "description": cls.description, "rules": cls.rules,
-            "params": grid[best], "param_grid_size": len(grid), "train_objective": _num(tr_scores[best]),
-            "signals": n_signals[best], "raw_skipped": raw[SELECTION_SCENARIO][best][1],
-            "walk_forward": {"metrics": wf_m, "positive_folds_pct": _num(wf_pos), "folds": folds,
-                             "param_stability_pct": _num(100 * max(chosen.count(c) for c in set(chosen)) / len(chosen))
-                             if chosen else None},
-            "evaluation": evals, "risk_variants": risk_var,
-            "runtime_s": round(time.time() - ts0, 1),
-        })
-        log(f"  {symbol} {tf:<3} {name:<24} Val {_fmt(evals[SELECTION_SCENARIO]['validation'])} | "
-            f"Test {_fmt(evals[SELECTION_SCENARIO]['test'])} ({time.time() - ts0:.0f}s)")
+                evals[sk] = {}
+                for per in ("train", "validation", "test"):
+                    a, b = periods.window(per)
+                    m, _ = metrics(slice_trades(raw[sk][best][0], a, b), sk, a, b, raw_skipped=None)
+                    evals[sk][per] = m
+            risk_var = {}
+            for rv in RISK_VARIANTS:
+                r = RiskRules(risk_per_trade=rv)
+                risk_var[f"{rv * 100:g}%"] = {
+                    per: metrics(slice_trades(sel[best][0], *periods.window(per)), SELECTION_SCENARIO,
+                                 *periods.window(per), r=r)[0] for per in ("validation", "test")}
+            results.append({
+                "strategy": name, "description": cls.description, "rules": cls.rules,
+                "params": grid[best], "param_grid_size": len(grid), "train_objective": _num(tr_scores[best]),
+                "signals": n_signals[best], "raw_skipped": raw[SELECTION_SCENARIO][best][1],
+                "walk_forward": {"metrics": wf_m, "positive_folds_pct": _num(wf_pos), "folds": folds,
+                                 "param_stability_pct": _num(100 * max(chosen.count(c) for c in set(chosen)) / len(chosen))
+                                 if chosen else None},
+                "evaluation": evals, "risk_variants": risk_var,
+                "runtime_s": round(time.time() - ts0, 1),
+            })
+            log(f"  {symbol} {tf:<3} {name:<24} Val {_fmt(evals[SELECTION_SCENARIO]['validation'])} | "
+                f"Test {_fmt(evals[SELECTION_SCENARIO]['test'])} ({time.time() - ts0:.0f}s)")
+        except Exception as e:  # eine fehlerhafte Strategie darf den Gesamtlauf nicht abbrechen
+            log(f"  FEHLER {symbol} {tf} {name}: {type(e).__name__}: {e}")
+            results.append({"strategy": name, "error": f"{type(e).__name__}: {e}",
+                            "traceback": traceback.format_exc()})
     return {
         "symbol": symbol, "tf": tf, "bars": int(len(bars)), "first": str(first)[:16], "last": str(last)[:16],
         "bars_per_year": {str(k): int(v) for k, v in bars.groupby(bars["time"].dt.year).size().items()},
@@ -242,6 +248,8 @@ def rank(jobs: list[dict]) -> dict:
             if j["symbol"] != sym or "results" not in j:
                 continue
             for r in j["results"]:
+                if "error" in r:
+                    continue
                 ok, reasons, score = assess(r)
                 ev = r["evaluation"][SELECTION_SCENARIO]
                 rows.append({"tf": j["tf"], "strategy": r["strategy"], "params": r["params"], "qualified": ok,
@@ -270,10 +278,18 @@ def _brief(m):
 
 
 # ---------------------------------------------------------------------- Gesamtlauf
+def _safe_job(cfg, sym, tf, names, log) -> dict:
+    try:
+        return run_job(cfg, sym, tf, names, log=log)
+    except Exception as e:  # z. B. fehlende Daten – übrige Märkte/Zeitrahmen laufen weiter
+        log(f"FEHLER {sym} {tf}: {type(e).__name__}: {e}")
+        return {"symbol": sym, "tf": tf, "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()}
+
+
 def _job_entry(args):
     cfg, sym, tf, names = args
     lines = []
-    res = run_job(cfg, sym, tf, names, log=lines.append)
+    res = _safe_job(cfg, sym, tf, names, lines.append)
     return res, lines
 
 
@@ -283,12 +299,18 @@ def run_all(cfg: Config, symbols, timeframes, strategy_names=None, workers: int 
     if workers <= 1:
         for j in jobs:
             log(f"Starte {j[1]} {j[2]} ...")
-            out.append(run_job(*j, log=log))
+            out.append(_safe_job(*j, log=log))
     else:
         with ProcessPoolExecutor(max_workers=workers) as ex:
             futs = {ex.submit(_job_entry, j): j for j in jobs}
             for f in as_completed(futs):
-                res, lines = f.result()
+                try:
+                    res, lines = f.result()
+                except Exception as e:  # z. B. Prozess durch Speichermangel beendet
+                    _, sym, tf, _ = futs[f]
+                    res = {"symbol": sym, "tf": tf, "error": f"{type(e).__name__}: {e}",
+                           "traceback": traceback.format_exc()}
+                    lines = [f"FEHLER {sym} {tf}: {type(e).__name__}: {e}"]
                 for line in lines:
                     log(line)
                 log(f"Fertig: {res['symbol']} {res['tf']} ({res.get('runtime_s')} s)")
@@ -298,4 +320,6 @@ def run_all(cfg: Config, symbols, timeframes, strategy_names=None, workers: int 
     return {"created_utc": pd.Timestamp.now(tz="UTC").isoformat(), "criteria": CRITERIA,
             "selection_scenario": SELECTION_SCENARIO, "risk_rules": asdict(RiskRules()),
             "risk_variants": [f"{x * 100:g}%" for x in RISK_VARIANTS],
+            "errors": [{"symbol": j["symbol"], "tf": j["tf"], "strategy": r.get("strategy"), "error": r["error"]}
+                       for j in out for r in ([j] if "error" in j else [x for x in j.get("results", []) if "error" in x])],
             "jobs": out, "rankings": rank(out)}

@@ -14,6 +14,10 @@ def _v(x, suf=""):
     return "–" if x is None else f"{x}{suf}"
 
 
+def _ok(job):
+    return [r for r in job.get("results", []) if "error" not in r]
+
+
 def _row(m):
     if not m or not m.get("trades"):
         return "0 | – | – | – | – | – | –"
@@ -81,7 +85,7 @@ def build_markdown(data: dict, crosscheck: dict | None = None) -> str:
           "| Markt | TF | Strategie | Parameter | Zeitraum | Trades | Netto € | PF | Treffer % | Erw. R | DD % | Sharpe |",
           "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for j in jobs:
-        for r in j["results"]:
+        for r in _ok(j):
             ev = r["evaluation"][SELECTION_SCENARIO]
             for per in ("validation", "test"):
                 L.append(f"| {j['symbol']} | {j['tf']} | {r['strategy']} | `{json.dumps(r['params'])}` | "
@@ -91,8 +95,8 @@ def build_markdown(data: dict, crosscheck: dict | None = None) -> str:
     L += ["## Basis- vs. konservatives Kostenszenario (Test, Summe aller Strategien)", "",
           "| Markt | TF | Netto € basis | Netto € konservativ |", "|---|---|---|---|"]
     for j in jobs:
-        b = sum((r["evaluation"]["basis"]["test"]["net_profit_eur"] or 0) for r in j["results"])
-        k = sum((r["evaluation"][SELECTION_SCENARIO]["test"]["net_profit_eur"] or 0) for r in j["results"])
+        b = sum((r["evaluation"]["basis"]["test"]["net_profit_eur"] or 0) for r in _ok(j))
+        k = sum((r["evaluation"][SELECTION_SCENARIO]["test"]["net_profit_eur"] or 0) for r in _ok(j))
         L.append(f"| {j['symbol']} | {j['tf']} | {b:.2f} | {k:.2f} |")
     L.append("")
 
@@ -105,6 +109,11 @@ def build_markdown(data: dict, crosscheck: dict | None = None) -> str:
                 L.append(f"| {sym} | {x['volume']} | {x['move']} | {x['profit_own']} / {x['profit_mt5']} | {x['profit_dev_pct']} | "
                          f"{x['margin_own']} / {x['margin_mt5']} | {x['margin_dev_pct']} |")
         L.append("")
+
+    if data.get("errors"):
+        L += ["## Fehler während des Laufs", "", "| Markt | TF | Strategie | Fehler |", "|---|---|---|---|"]
+        L += [f"| {e['symbol']} | {e['tf']} | {e.get('strategy') or '–'} | {e['error']} |" for e in data["errors"]]
+        L += ["", "Details (Traceback) in der JSON-Datei.", ""]
 
     L += ["## Qualitätsanforderungen", "", "| Kriterium | Wert |", "|---|---|"]
     L += [f"| {k} | {v} |" for k, v in CRITERIA.items()]

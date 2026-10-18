@@ -101,3 +101,20 @@ def test_periods_start_where_data_becomes_dense(tmp_path):
     cfg.conversion_timeframes = ["H1", "D1"]
     res = run_job(cfg, "XAUUSD", "H1", ["ema_trend"], log=lambda *a: None)
     assert res["periods"]["start"] >= "2020-01-01"
+
+
+def test_failing_strategy_does_not_abort_run(project, monkeypatch):
+    """Ein Fehler in einer Strategie darf den Lauf nicht abbrechen: Bericht, JSON und Protokoll entstehen,
+    der Fehler wird ausgewiesen."""
+    from tradingbot.strategies.library import Momentum
+
+    def boom(self, bars):
+        raise ValueError("Testfehler")
+    monkeypatch.setattr(Momentum, "entries", boom)
+    rc = backtest_ausfuehren.main(["--config", str(project / "config.toml"), "--zeitrahmen", "H1",
+                                   "--strategien", "ema_trend", "momentum"])
+    assert rc == 1
+    data = json.loads((project / "reports" / "phase3_ergebnisse.json").read_text(encoding="utf-8"))
+    assert {e["strategy"] for e in data["errors"]} == {"momentum"}
+    assert all(r["strategy"] == "ema_trend" for rk in data["rankings"].values() for r in rk["ranking"])
+    assert list((project / "reports").glob("phase3_log_*.txt"))

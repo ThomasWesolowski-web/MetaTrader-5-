@@ -229,24 +229,27 @@ und ist für Backtests vernachlässigbar.
 
 ## Korrektur: Gold-Intraday-Historie
 
-**Stand nach dem Datenbericht vom 18.10.2026, 14:13 UTC.**
+**Stand: Datenbericht vom 18.10.2026, 14:29 UTC (mit Dichte je Jahr).**
 
-Die Gold-Intraday-Daten (M1–H1) beginnen zwar 2007 und haben keine Lücke länger als 4 Tage, sind aber nur
-**zu 41–46 % dicht**: XAUUSD H1 hat 53 669 von 115 941 laut Handelskalender möglichen Kerzen (D1 dagegen vollständig).
-Die fehlende Zeit lag in 2 670 wiederkehrenden Lücken mit zusammen 83 640 Stunden (Ø 31 h) – diese wurden als
-„regelmäßige Pause“ eingestuft und damit als unbedenklich gezählt. Die Aussage „Gold M1 ab 2007“ war daher
-irreführend, die frühere Abdeckung von 99,96 % zu optimistisch.
+| Datendichte (% der möglichen Kerzen) | 2007–2017 | 2018 | 2019–2025 |
+|---|---|---|---|
+| XAUUSD M1 | 0,1 % | 30 % | 98 % |
+| XAUUSD M5 | 0,4–0,5 % | 33 % | 98 % |
+| XAUUSD H1 | 4–5 % | 79 % | 98 % |
+| BTCUSD M1 | – | 21 % | 61–98 % (bis 2020 ohne Wochenendhandel) |
+| EURUSD M5 | 97–100 % | 99 % | 99 % |
 
-Verlauf der Korrektur (ehrlich dokumentiert):
+**Gold-Intraday-Daten sind erst ab 2018 nutzbar** („dicht ab“: H1 04/2018, M1/M5 10/2018). Davor existieren nur
+vereinzelte Kerzen (wenige pro Tag bzw. Woche) – formal ohne Lücke über 4 Tage, praktisch aber keine Intraday-Historie.
+Die Aussage „Gold M1 ab 2007“ und die frühere Abdeckung von 99,96 % waren daher falsch. D1 ist ab 2007 vollständig.
 
-1. Erste Vermutung (Phase 3, Lauf 1): ein etwa zehnjähriges Loch, verdeckt durch die Feiertagsregel. Die
-   Feiertagsregel war tatsächlich fehlerhaft (lange Lücken berührten Feiertage) und wurde behoben – **ein solches
-   Loch gibt es aber nicht**; diese Vermutung war falsch.
-2. Tatsächliche Ursache: Die Regel „regelmäßige Pause“ akzeptierte wiederkehrende Lücken beliebiger Länge.
-   Jetzt gilt sie nur bis 6 h (Wartungsfenster), Wochenendschließungen bei 24/7-Märkten erst ab 24 h; längere
-   Lücken zählen als **unerklärt**. Regressionstests sichern beides ab.
-3. Neu im Datenbericht: **Dichte je Jahr** und **dicht ab** (erster Monat, ab dem die monatliche Dichte durchgehend
-   ≥ 60 % des Medians der letzten 24 Monate liegt). Backtests beginnen frühestens dort.
+Ursachen in der Qualitätsprüfung (behoben, mit Regressionstests):
 
-In welchen Jahren die Gold-Daten dünn sind, zeigt der nächste Lauf von `daten_aktualisieren.py` (Tabelle
-„Datendichte je Jahr“). Bitcoin (Dichte 78–87 %, mit dokumentierten Schließzeiten) und EURUSD (99 %) sind unauffällig.
+1. Eine Lücke, die einen Feiertag berührte, galt als „Feiertag“ – jetzt nur bis 36 h Handelszeit.
+2. Wiederkehrende Lücken beliebiger Länge galten als „regelmäßige Pause“ (Gold H1: 2 670 Lücken, 83 640 h) –
+   jetzt nur bis 6 h (Wartungsfenster); Wochenendschließung bei 24/7-Märkten erst ab 24 h.
+3. Neu: Dichte je Jahr, monatliche Dichte und „dicht ab“; Backtests beginnen frühestens dort.
+
+Nach der Korrektur: Abdeckung der Handelszeit Gold M1 47,5 % (über die gesamte Spanne 2007–2026),
+Bitcoin M1 95,1 %, EURUSD M5 99,5 %. Zwischenzeitlich hatte ich die Ursache als „zehnjähriges Loch“ beschrieben
+und danach als „kein Loch, nur dünn“ – beides war ungenau; die Dichte je Jahr oben ist der belastbare Befund.

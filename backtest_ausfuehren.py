@@ -40,10 +40,30 @@ def main(argv=None, client=None) -> int:
     if unknown:
         print(f"Unbekannte Strategien: {sorted(unknown)}. Verfügbar: {trade_strategies()}")
         return 2
-    print("Phase 3 – Backtests (nur Simulation, keine Orders)")
-    print(f"Märkte {symbols}, Zeitrahmen {args.zeitrahmen}, {len(names)} Strategien, {args.prozesse} Prozess(e)")
+    lines: list[str] = []
+
+    def log(msg=""):
+        print(msg, flush=True)
+        lines.append(str(msg))
+
+    cfg.report_dir.mkdir(parents=True, exist_ok=True)
+    log_file = cfg.report_dir / f"phase3_log_{time.strftime('%Y%m%d_%H%M%S')}.txt"
+    try:
+        return _run(args, cfg, symbols, names, client, log, log_file)
+    except BaseException:
+        import traceback
+        log(traceback.format_exc())
+        raise
+    finally:
+        log_file.write_text("\n".join(lines), encoding="utf-8")
+        print(f"Protokoll: {log_file}")
+
+
+def _run(args, cfg, symbols, names, client, log, log_file) -> int:
+    log("Phase 3 – Backtests (nur Simulation, keine Orders)")
+    log(f"Märkte {symbols}, Zeitrahmen {args.zeitrahmen}, {len(names)} Strategien, {args.prozesse} Prozess(e)")
     t0 = time.time()
-    data = run_all(cfg, symbols, args.zeitrahmen, names, workers=args.prozesse)
+    data = run_all(cfg, symbols, args.zeitrahmen, names, workers=args.prozesse, log=log)
 
     cross = None
     if args.mt5_abgleich:
@@ -51,20 +71,24 @@ def main(argv=None, client=None) -> int:
         if client is None:
             from tradingbot.mt5_client import MT5Client
             client = MT5Client(terminal_path=cfg.terminal_path)
-        print("Abgleich mit MT5-Rechenfunktionen ...")
+        log("Abgleich mit MT5-Rechenfunktionen ...")
         cross = crosscheck.run(client, MarketStore(cfg.data_root))
 
     md, js, latest = report.write(cfg.report_dir, data, cross)
-    print("\nErgebnis je Markt:")
+    log("\nErgebnis je Markt:")
     for sym, rk in data["rankings"].items():
-        print(f"  {sym}: {rk['verdict']}")
+        log(f"  {sym}: {rk['verdict']}")
         for r in rk["ranking"][:5]:
             t = r["test"]
-            print(f"    {r['rank']}. {r['strategy']} {r['tf']} (Score {r['score']}, "
-                  f"{'qualifiziert' if r['qualified'] else 'nicht qualifiziert'}) – Test: {t['trades']} Trades, "
-                  f"{t['net_profit_eur']} €, PF {t['profit_factor']}, DD {t['max_drawdown_pct']} %")
-    print(f"\nFertig in {(time.time() - t0) / 60:.1f} min.\nBericht: {md}\nErgebnisdatei: {latest}")
-    return 0
+            log(f"    {r['rank']}. {r['strategy']} {r['tf']} (Score {r['score']}, "
+                f"{'qualifiziert' if r['qualified'] else 'nicht qualifiziert'}) – Test: {t['trades']} Trades, "
+                f"{t['net_profit_eur']} €, PF {t['profit_factor']}, DD {t['max_drawdown_pct']} %")
+    if data["errors"]:
+        log(f"\nACHTUNG: {len(data['errors'])} Fehler während des Laufs (siehe Bericht):")
+        for e in data["errors"][:10]:
+            log(f"  {e['symbol']} {e['tf']} {e.get('strategy') or ''}: {e['error']}")
+    log(f"\nFertig in {(time.time() - t0) / 60:.1f} min.\nBericht: {md}\nErgebnisdatei: {latest}")
+    return 1 if data["errors"] else 0
 
 
 if __name__ == "__main__":
