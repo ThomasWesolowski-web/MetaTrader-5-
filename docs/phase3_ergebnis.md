@@ -1,7 +1,7 @@
 # Phase 3 – Strategieentwicklung, Backtesting und Strategieauswahl
 
 **Stand:** 18.10.2026 · **Nur Simulation:** keine Orders an MetaTrader 5, keine Demo- oder Echtgeld-Trades
-**Status:** Strategiebibliothek, Backtester und Walk-Forward-Auswertung fertig und mit 131 Tests geprüft.
+**Status:** Strategiebibliothek, Backtester und Walk-Forward-Auswertung fertig und mit 134 Tests geprüft.
 **Ausstehend:** Lauf auf dem Windows-PC mit den echten Vantage-Daten. Die Abschnitte
 [Ergebnisse](#ergebnisse-echte-daten) und [Empfehlung](#empfehlung-für-phase-4) werden ausschließlich aus diesem
 Lauf befüllt – es werden keine Ergebnisse angenommen oder geschätzt.
@@ -118,13 +118,69 @@ das Ergebnis ausdrücklich: **aktuell keine Strategie für den Demohandel geeign
 
 ## Datenqualität (erneute Prüfung)
 
-*Ausstehend – aus `python daten_aktualisieren.py` auf dem PC.*
+*Ausstehend:* Der mitgeschickte Datenbericht (18.10.2026, 12:59 UTC) stammt noch von **vor** den Korrekturen
+(enthält BTCEUR und die alten Ausreißerzahlen). Die korrigierte Prüfung muss mit `python daten_aktualisieren.py`
+erneut laufen. Dabei wurde inzwischen ein weiterer Fehler behoben (siehe Phase-2-Korrektur zur Gold-Intraday-Historie).
 
 ## Ergebnisse (echte Daten)
 
-*Ausstehend – aus `python backtest_ausfuehren.py` auf dem PC (Bericht `reports/phase3_bericht_*.md`,
-maschinenlesbar `reports/phase3_ergebnisse.json`).*
+### Lauf 1 (18.10.2026, 14:01 UTC) – vorläufig
+
+120 Kombinationen (2 Märkte × 5 Zeitrahmen × 12 Strategien), Laufzeit 25 Minuten. **Ergebnis: Für XAUUSD und
+BTCUSD ist aktuell keine Strategie für den Demohandel geeignet.**
+
+**Bei der Auswertung gefundene Fehler (behoben, mit Regressionstests; erneuter Lauf nötig):**
+
+1. **Gold-Trainingszeitraum lag in einer Datenlücke.** Die Zeiträume wurden ab dem ersten D1-Datum (2007) geteilt;
+   die Gold-Intraday-Daten sind aber erst ab ca. 2017/18 lückenlos. Training (2007–2019) enthielt daher kaum Daten –
+   deshalb gab es für Gold keinerlei Walk-Forward-Ergebnisse. Jetzt beginnen die Zeiträume mit der lückenlosen
+   Historie („lückenlos ab“, Referenz H1).
+2. **Bitcoin-Trades 2018–2021 verworfen.** Die BTC-Margin wurde direkt über BTCEUR umgerechnet (Historie erst ab
+   07/2021); davor fehlte der Kurs und 933 Trades wurden als „Margin“ verworfen. Jetzt werden fehlende Direktkurse
+   über BTCUSD × EURUSD ergänzt.
+
+**Belastbare Ergebnisse aus Lauf 1** – der **Testzeitraum** war von beiden Fehlern nicht betroffen (Gold
+05.12.2022–16.10.2026, Bitcoin 14.01.2025–18.10.2026; lückenlose Daten, Margin korrekt):
+
+| Markt | TF | Strategien mit ≥ 20 Test-Trades | davon netto > 0 (konservativ) | Median Erwartungswert je Trade (R), konservativ | dto. Basis-Kosten | Median Mindestlot-Ausfall |
+|---|---|---|---|---|---|---|
+| BTCUSD | M1 | 12 | 0 | −0,82 | −0,37 | 89 % |
+| BTCUSD | M5 | 12 | 0 | −0,45 | −0,15 | 82 % |
+| BTCUSD | M15 | 7 | 0 | −0,40 | −0,06 | 94 % |
+| BTCUSD | M30 | 3 | 0 | −0,45 | −0,24 | 99 % |
+| BTCUSD | H1 | 3 | 0 | −0,37 | −0,18 | 100 % |
+| XAUUSD | M1 | 12 | 0 | −0,51 | −0,32 | 89 % |
+| XAUUSD | M5 | 12 | 0 | −0,35 | −0,22 | 88 % |
+| XAUUSD | M15 | 8 | 0 | −0,31 | −0,25 | 95 % |
+| XAUUSD | M30 | 5 | 1 (26 Trades) | −0,28 | −0,10 | 99 % |
+| XAUUSD | H1 | 2 | 0 | −0,27 | −0,25 | 100 % |
+
+Erkenntnisse:
+
+- **Keine Kante nach Kosten:** Im Testzeitraum ist der Erwartungswert in allen Zeitrahmen negativ – auch im
+  Basis-Szenario ohne Kommission. Je kürzer der Zeitrahmen, desto stärker (M1: −0,5 bis −0,8 R je Trade), weil
+  Spread und Slippage im Verhältnis zum Stop-Abstand wachsen. **M5 und M15 sind für kurzfristigen automatisierten
+  Handel mit diesen Regeln nach Kosten nicht geeignet**; M1 noch weniger.
+- **Mindestlot ist bei 1 000 € und 0,25 % die harte Grenze.** Max. Stopabstand bei 0,01 Lot: Gold 2,81 USD,
+  Bitcoin 281 USD. Anteil der Kerzen im Testzeitraum, bei denen ein 1,5-ATR-Stop überhaupt erlaubt ist:
+
+  | | M1 | M5 | M15 | M30 | H1 |
+  |---|---|---|---|---|---|
+  | XAUUSD | 82 % | 49 % | 18 % | 3 % | 0 % |
+  | BTCUSD | 98 % | 78 % | 33 % | 12 % | 2 % |
+
+  Höhere Zeitrahmen – auf denen Kosten weniger ins Gewicht fallen – sind mit 2,50 € Risiko praktisch nicht handelbar.
+  Die hohen Ausfallquoten in der Ergebnistabelle entstehen zusätzlich, weil das Konto bei Verluststrategien
+  schrumpft und 0,25 % davon noch kleiner werden.
+- **Berechnungen stimmen mit MT5 überein** (`--mt5-abgleich`): Gewinn und Margin für 0,01/0,1/1 Lot, Kauf und
+  Verkauf, Abweichung ≤ 0,05 % (bei Kleinstbeträgen bis 0,2 % durch Cent-Rundung von MT5).
+
+### Lauf 2 (nach den Korrekturen)
+
+*Ausstehend.*
 
 ## Empfehlung für Phase 4
 
-*Ausstehend – erst nach Vorliegen der echten Ergebnisse.*
+*Ausstehend – nach Lauf 2. Absehbar ist bereits: Mit den getesteten Regeln, 1 000 € Kapital und 0,25 % Risiko
+erfüllt keine Strategie die Qualitätsanforderungen; Demohandel mit einer dieser Strategien wäre nach den Daten
+nicht begründet.*

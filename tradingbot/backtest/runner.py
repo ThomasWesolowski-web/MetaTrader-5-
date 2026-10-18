@@ -27,6 +27,7 @@ from .account import RiskRules, run_account
 from .costs import scenarios_for
 from .engine import simulate
 from .metrics import compute
+from ..quality import continuous_start
 from .walkforward import objective, slice_trades, split_periods, wf_windows
 
 SELECTION_SCENARIO = "konservativ"
@@ -85,13 +86,14 @@ def run_job(cfg: Config, symbol: str, tf: str, strategy_names: list[str] | None 
     bars = store.load(symbol, tf)
     if bars.empty:
         return {"symbol": symbol, "tf": tf, "error": "keine Daten"}
-    d1 = store.bounds(symbol, "D1") or store.bounds(symbol, tf)
-    first = pd.Timestamp(bars["time"].iloc[0])
+    # Zeiträume je Markt einheitlich für alle Zeitrahmen: ab Beginn der LÜCKENLOSEN Intraday-Historie
+    # (Referenz H1). Frühere, nur vereinzelt vorhandene Kerzen werden nicht verwendet – sonst läge der
+    # Trainingszeitraum großteils in einer Datenlücke (bei Gold: Intraday-Lücke ca. 2007–2017).
+    ref = store.load(symbol, "H1") if tf != "H1" else bars
+    ref = ref if not ref.empty else bars
+    first = max(continuous_start(ref), continuous_start(bars))
     last = pd.Timestamp(bars["time"].iloc[-1])
-    if d1:
-        from ..server_time import parse_scheme
-        scheme = parse_scheme(ctx["doc"].get("time_scheme", {}).get("scheme", "fixed:+00:00"))
-        first = min(first, scheme.to_utc([d1["first_server"]])[0])
+    bars = bars[bars["time"] >= first].reset_index(drop=True)
     periods = split_periods(first.normalize(), last)
     cal = get_calendar(cfg.calendar_for(symbol))
     scen = scenarios_for(symbol)
@@ -179,6 +181,7 @@ def run_job(cfg: Config, symbol: str, tf: str, strategy_names: list[str] | None 
             f"Test {_fmt(evals[SELECTION_SCENARIO]['test'])} ({time.time() - ts0:.0f}s)")
     return {
         "symbol": symbol, "tf": tf, "bars": int(len(bars)), "first": str(first)[:16], "last": str(last)[:16],
+        "bars_per_year": {str(k): int(v) for k, v in bars.groupby(bars["time"].dt.year).size().items()},
         "periods": periods.to_dict(), "cost_scenarios": {k: v.to_dict() for k, v in scen.items()},
         "feasibility": _feasibility(bars, spec, conv, ctx["account_ccy"], rules, periods.val_end),
         "results": results, "runtime_s": round(time.time() - t0, 1),

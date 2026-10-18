@@ -31,6 +31,7 @@ from .sessions import Calendar, open_seconds_between
 from .timeframes import seconds
 
 GAP_EXPECTED = ("weekend", "daily_break", "holiday", "low_activity", "recurring_pause")
+HOLIDAY_MAX_OPEN_H = 36
 NY = "America/New_York"
 
 
@@ -104,7 +105,9 @@ def classify_gaps(df: pd.DataFrame, tf: str, calendar: Calendar, cfg: QualityCon
         # Feiertag liegt zwischen Lückenbeginn und -ende (inklusive)
         k = np.searchsorted(hol_dates, a, side="left")
         has = (k < len(hol_dates)) & (hol_dates[np.minimum(k, len(hol_dates) - 1)] <= b)
-        cat[~closed & has] = "holiday"
+        # Nur kurze Lücken (<= 36 h Handelszeit) können ein Feiertag sein. Eine mehrjährige Lücke "berührt"
+        # zwangsläufig Feiertage – sie wurde früher fälschlich als Feiertag eingestuft (Gold-Intraday 2007–2017)
+        cat[~closed & has & (open_s <= HOLIDAY_MAX_OPEN_H * 3600)] = "holiday"
 
     if calendar.always_open:
         # 24/7-Markt, aber Broker hat am Wochenende geschlossen (Fr ab 15:00 bis So 24:00 New York)
@@ -224,6 +227,16 @@ def consistency_with_m1(m1: pd.DataFrame, other: pd.DataFrame, tf: str, rel_tol:
             "close_match_pct": round(100 * close_ok.mean(), 2), "high_low_match_pct": round(100 * hl_ok.mean(), 2)}
 
 
+def continuous_start(df: pd.DataFrame, max_gap_days: float = 14.0) -> pd.Timestamp:
+    """Beginn der lückenlosen Historie: erste Kerze nach der letzten Lücke von mehr als max_gap_days
+    Kalendertagen (Feiertage und Wochenenden sind deutlich kürzer)."""
+    t = pd.DatetimeIndex(df["time"])
+    if len(t) < 2:
+        return t[0] if len(t) else pd.Timestamp("NaT")
+    gaps = np.nonzero(np.diff(t.as_unit("ns").asi8) > max_gap_days * 86400 * 10**9)[0]
+    return t[gaps[-1] + 1] if len(gaps) else t[0]
+
+
 # ---------------------------------------------------------------------- Gesamtprüfung
 def check_bars(df: pd.DataFrame, symbol: str, tf: str, calendar: Calendar, cfg: QualityConfig) -> QualityResult:
     if df.empty:
@@ -253,6 +266,11 @@ def check_bars(df: pd.DataFrame, symbol: str, tf: str, calendar: Calendar, cfg: 
         # Anteil der Handelszeit, der nicht durch unerklärte Lücken verloren ging
         "coverage_pct": round(100 * (1 - data_gap_open_h * 3600 / open_total), 3) if open_total > 0 else None,
         "anomalies": anomalies["kind"].value_counts().to_dict() if not anomalies.empty else {},
+        # Datendichte: vorhandene Kerzen gegenüber der laut Kalender möglichen Anzahl
+        "expected_bars": int(open_total // tf_s),
+        "bar_density_pct": round(100 * len(df) / max(1, open_total // tf_s), 1),
+        "largest_gap_days": round(float(gaps["hours"].max()) / 24, 1) if not gaps.empty else 0.0,
+        "continuous_from_utc": continuous_start(df).isoformat(),
         "spread_median_points": float(np.median(df["spread"])),
         "spread_p95_points": float(np.percentile(df["spread"], 95)),
     }

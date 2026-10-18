@@ -125,3 +125,16 @@ def test_btc_broker_closures_on_weekend_and_holidays(fake_ny):
     assert cat[pd.Timestamp(cuts[0][0], tz="UTC")] == "weekend"
     assert cat[pd.Timestamp(cuts[1][0], tz="UTC")] == "holiday"
     assert cat[pd.Timestamp(cuts[2][0], tz="UTC")] == "data_gap"
+
+
+def test_multi_year_hole_is_not_a_holiday(fake_ny):
+    """Regressionstest: Eine lange Datenlücke berührt Feiertage, ist aber ein Datenfehler (Fall Gold-Intraday
+    2007–2017 bei Vantage) und muss als unerklärt gelten; 'lückenlos ab' zeigt den Neubeginn."""
+    from tradingbot.quality import continuous_start
+    df = frame(fake_ny, "XAUUSD", "H1")
+    cut = (df["time"] > "2025-11-25") & (df["time"] < "2026-02-20")     # enthält Weihnachten, Neujahr, MLK
+    res = check_bars(df[~cut], "XAUUSD", "H1", get_calendar("cme_metals"), Q)
+    big = res.gaps.sort_values("hours").iloc[-1]
+    assert big["category"] == "data_gap" and big["hours"] > 24 * 80
+    assert pd.Timestamp(res.summary["continuous_from_utc"]) >= pd.Timestamp("2026-02-20", tz="UTC")
+    assert continuous_start(df) == df["time"].iloc[0]

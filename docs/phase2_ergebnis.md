@@ -1,7 +1,8 @@
 # Phase 2 – Datenbasis: Ergebnis
 
 **Stand:** 18.10.2026 · **Trades ausgeführt:** keine (weder Demo noch Echtgeld)
-**Status:** abgeschlossen. Echte Daten von VantageMarkets-Demo geladen und geprüft
+**Korrektur (Phase 3):** Die Gold-Intraday-Historie (M1–H1) ist **nicht** lückenlos ab 2007 – siehe
+[Korrektur](#korrektur-gold-intraday-historie). **Status:** abgeschlossen. Echte Daten von VantageMarkets-Demo geladen und geprüft
 (Gold ab 2007, Bitcoin ab 2018 in M1), 75 automatisierte Tests bestanden.
 
 ## Einordnung
@@ -225,3 +226,16 @@ und ist für Backtests vernachlässigbar.
   und muss in Phase 3 eingerechnet werden.
 - Bitcoin hatte 2018–2020 bei Vantage keinen Wochenendhandel – Ergebnisse aus dieser Zeit sind für
   Wochenendstrategien nicht repräsentativ.
+
+## Korrektur: Gold-Intraday-Historie
+
+Beim Auswerten der Phase-3-Backtests fiel auf, dass die Kerzenzahlen nicht zu einer lückenlosen Historie ab 2007
+passen: XAUUSD H1 hat 53 669 Kerzen – bei 115 Handelsstunden pro Woche entspricht das rund 9 Jahren, nicht 19
+(D1 dagegen mit 264 Kerzen/Jahr vollständig ab 2007). In den Intraday-Daten liegt also eine Lücke von etwa zehn Jahren
+(vereinzelte Kerzen im Juni 2007, lückenlos erst ab ca. 2017/18). Die Aussage „Gold M1 ab 2007“ war daher falsch.
+
+Ursache in der Qualitätsprüfung: Eine Lücke, die einen Feiertag berührte, galt als „Feiertag“ – eine mehrjährige
+Lücke berührt zwangsläufig Feiertage. Behoben (Feiertag nur bei Lücken bis 36 h Handelszeit, Regressionstest);
+der Datenbericht zeigt jetzt zusätzlich **Dichte**, **größte Lücke** und **lückenlos ab**. Der genaue Beginn der
+lückenlosen Gold-Historie ergibt sich aus dem nächsten Lauf von `daten_aktualisieren.py`. Bitcoin ist nach den
+Kerzenzahlen plausibel vollständig ab 2018 (mit den dokumentierten Wochenend- und Feiertagsschließungen).

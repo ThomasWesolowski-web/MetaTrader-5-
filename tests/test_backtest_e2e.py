@@ -60,3 +60,23 @@ def test_crosscheck_against_terminal(make_fake, client_for, tmp_path):
         for x in rows:
             assert abs(x["profit_dev_pct"]) < 0.5        # Cent-Rundung von MT5 bei kleinen Beträgen
             assert abs(x["margin_dev_pct"]) < 0.5
+
+
+def test_periods_start_after_long_data_hole(tmp_path):
+    """Regressionstest: Vereinzelte frühe Kerzen vor einer langen Lücke dürfen den Trainingszeitraum nicht
+    in die Lücke legen (Fall Gold: Intraday ab 2007 gemeldet, lückenlos erst ab ca. 2017)."""
+    import pandas as pd
+    from tradingbot.backtest.runner import run_job
+    from tradingbot.config import Config
+    st = synthetic_store.build(tmp_path / "data", start="2019-01-01", end="2024-01-01", tfs=("H1", "D1"))
+    early = st.load("XAUUSD", "H1").iloc[:200].copy()
+    shift = pd.Timedelta(days=365 * 4)
+    early["time"] = early["time"] - shift
+    early["time_server"] = early["time_server"] - int(shift.total_seconds())
+    st.upsert("XAUUSD", "H1", early)
+    cfg = Config()
+    cfg.data_root = tmp_path / "data"
+    cfg.conversion_timeframes = ["H1", "D1"]
+    res = run_job(cfg, "XAUUSD", "H1", ["ema_trend"], log=lambda *a: None)
+    assert res["periods"]["start"] >= "2019-01-01"
+    assert min(res["bars_per_year"]) >= "2019"

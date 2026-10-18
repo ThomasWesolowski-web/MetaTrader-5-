@@ -78,8 +78,8 @@ def build_markdown(update: dict | None, quality: dict, created: pd.Timestamp) ->
     res = quality.get("results", [])
     if res:
         L += ["## Datenbestand und Qualität", "",
-              "| Symbol | TF | Kerzen | von (UTC) | bis (UTC) | Tage | Dupl. | ungültig | Lücken (Kategorien) | unerklärt (h Handelszeit) | Abdeckung | Ausreißer |",
-              "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+              "| Symbol | TF | Kerzen | von (UTC) | lückenlos ab | bis (UTC) | Dichte | größte Lücke (Tage) | Dupl. | ungültig | Lücken (Kategorien) | unerklärt (h Handelszeit) | Abdeckung | Ausreißer |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for q in res:
             s = q.summary
             if not s.get("rows"):
@@ -87,9 +87,10 @@ def build_markdown(update: dict | None, quality: dict, created: pd.Timestamp) ->
             gaps = ", ".join(f"{GAP_LABELS.get(k, k)} {v}" for k, v in sorted(s["gaps"].items())) or "–"
             invalid = s["invalid_ohlc"] + s["nonpositive_prices"] + s["nan_rows"] + s["negative_spread"]
             anom = ", ".join(f"{k} {v}" for k, v in s["anomalies"].items()) or "0"
-            L.append(f"| {q.symbol} | {q.tf} | {s['rows']} | {_fmt_time(s['first_utc'])} | {_fmt_time(s['last_utc'])} | "
-                     f"{s['span_days']} | {s['duplicates']} | {invalid} | {gaps} | {s['data_gap_open_hours']} | "
-                     f"{s['coverage_pct']} % | {anom} |")
+            L.append(f"| {q.symbol} | {q.tf} | {s['rows']} | {_fmt_time(s['first_utc'])} | "
+                     f"{_fmt_time(s.get('continuous_from_utc'))} | {_fmt_time(s['last_utc'])} | "
+                     f"{s.get('bar_density_pct')} % | {s.get('largest_gap_days')} | {s['duplicates']} | {invalid} | "
+                     f"{gaps} | {s['data_gap_open_hours']} | {s['coverage_pct']} % | {anom} |")
         L.append("")
         for q in res:
             ug = q.unexplained_gaps()
@@ -118,7 +119,9 @@ def build_markdown(update: dict | None, quality: dict, created: pd.Timestamp) ->
           "- **Lückenkategorien:** Wochenende/Tagespause/Feiertag laut Handelskalender (Gold: CME, New Yorker Zeit), "
           "„ohne Ticks“ = kurze Lücke in M1/M5, „regelm. Pause“ = wiederholt zur gleichen Serverzeit "
           "(z. B. Broker-Wartung), **unerklärt** = möglicher Datenfehler.",
-          "- **Abdeckung** = Anteil der Handelszeit ohne unerklärte Lücken.",
+          "- **Abdeckung** = Anteil der Handelszeit ohne unerklärte Lücken. **Dichte** = vorhandene Kerzen / laut "
+          "Kalender mögliche Kerzen (M1 typischerweise < 100 %, weil Minuten ohne Ticks keine Kerze haben). "
+          "**lückenlos ab** = erste Kerze nach der letzten Lücke von mehr als 14 Tagen.",
           "- **Ausreißer:** outlier = extreme Rendite, spike = Ausschlag mit sofortiger Rückkehr (Fehltick-Verdacht), "
           "range_outlier = extreme Kerzenspanne. Markiert, nicht verändert.",
           "- Fehlende Kurse werden **nicht** aufgefüllt oder erfunden.", ""]

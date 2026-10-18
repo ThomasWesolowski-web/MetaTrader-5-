@@ -183,16 +183,25 @@ class CurrencyConverter:
                     else pd.DatetimeIndex(np.atleast_1d(times)).as_unit("ns").asi8)
         if from_ccy == to_ccy:
             return np.ones(len(times_ns))
-        direct = self._direct(from_ccy, to_ccy, times_ns)
-        if direct is not None:
-            return direct
+        out = self._direct(from_ccy, to_ccy, times_ns)
+        if out is not None and not np.isnan(out).any():
+            return out
+        # Direktkurs fehlt ganz oder für einen Teil der Zeit (z. B. BTCEUR erst ab 2021):
+        # Lücken über Zwischenwährungen füllen (BTC -> USD -> EUR mit BTCUSD und EURUSD)
         for via in sorted(self.currencies() - {from_ccy, to_ccy}):
             a = self._direct(from_ccy, via, times_ns)
-            if a is not None:
-                b = self._direct(via, to_ccy, times_ns)
-                if b is not None:
-                    return a * b
-        raise KeyError(f"Kein Umrechnungskurs {from_ccy}->{to_ccy} verfügbar")
+            if a is None:
+                continue
+            b = self._direct(via, to_ccy, times_ns)
+            if b is None:
+                continue
+            cross = a * b
+            out = cross if out is None else np.where(np.isnan(out), cross, out)
+            if not np.isnan(out).any():
+                break
+        if out is None:
+            raise KeyError(f"Kein Umrechnungskurs {from_ccy}->{to_ccy} verfügbar")
+        return out
 
 
 # ---------------------------------------------------------------------- Risiko in Kontowährung

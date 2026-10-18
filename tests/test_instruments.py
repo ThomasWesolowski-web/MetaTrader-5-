@@ -113,3 +113,18 @@ def test_cross_rate_via_intermediate_currency():
     assert c.rate("BTC", "EUR")[0] == pytest.approx(80000 / 1.10)       # BTC -> USD -> EUR
     assert c.rate("EUR", "BTC")[0] == pytest.approx(1.10 / 80000)
     assert c.can_convert("BTC", "EUR") and not c.can_convert("JPY", "EUR")
+
+
+def test_partial_direct_rate_is_filled_by_cross_rate():
+    """Regressionstest: BTCEUR erst ab 2021 vorhanden -> BTC->EUR davor über BTCUSD × EURUSD
+    (vorher NaN -> Trades als 'margin' verworfen)."""
+    import pandas as pd
+    t = lambda s: pd.Timestamp(s, tz="UTC").value
+    c = CurrencyConverter({
+        "BTCEUR": (np.array([t("2021-08-01")]), np.array([40000.0]), "BTC", "EUR"),
+        "BTCUSD": (np.array([t("2018-01-01")]), np.array([11000.0]), "BTC", "USD"),
+        "EURUSD": (np.array([t("2000-01-01")]), np.array([1.10]), "EUR", "USD"),
+    })
+    r = c.rate("BTC", "EUR", pd.to_datetime(["2019-06-01", "2022-01-01"], utc=True))
+    assert r[0] == pytest.approx(11000 / 1.10)     # Kreuzkurs vor 2021
+    assert r[1] == pytest.approx(40000.0)          # danach Direktkurs
