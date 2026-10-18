@@ -218,6 +218,16 @@ def score_symbol(sym, asset: dict) -> int:
     return score
 
 
+def wait_for_tick(mt5, name: str, seconds: float = 5.0):
+    """Nach symbol_select kann der erste Kurs einige Sekunden brauchen."""
+    t_end = time.time() + seconds
+    tick = mt5.symbol_info_tick(name)
+    while (tick is None or tick.bid == 0) and time.time() < t_end:
+        time.sleep(0.25)
+        tick = mt5.symbol_info_tick(name)
+    return tick
+
+
 def find_symbols(rep: Report, mt5, args) -> dict:
     section("3. Symbolsuche")
     s = "Symbole"
@@ -251,7 +261,7 @@ def find_symbols(rep: Report, mt5, args) -> dict:
         if not mt5.symbol_select(chosen, True):
             rep.add(s, f"{asset['label']}-Symbol", FAIL, f"{chosen} – symbol_select fehlgeschlagen: {mt5.last_error()}")
             continue
-        tick = mt5.symbol_info_tick(chosen)
+        tick = wait_for_tick(mt5, chosen)
         if tick is not None and 0 < tick.bid < asset["min_price"]:
             rep.add(s, f"{asset['label']}-Symbol", FAIL if not forced else WARN,
                     f"{chosen} – Kurs {tick.bid} ist für {asset['label']} unplausibel (< {asset['min_price']}). "
@@ -479,7 +489,7 @@ def list_symbols(args) -> int:
         text = args.suche.upper()
         hits = [x for x in (mt5.symbols_get() or ())
                 if text in x.name.upper() or text in (x.description or "").upper()]
-        print(f"{len(hits)} Symbole mit '{args.suche}':\n")
+        print(f"{len(hits)} Symbole mit '{args.suche}' (Kurs 0.0 = nicht in der Marktübersicht):\n")
         print(f"{'Symbol':<20} {'Basis':<8} {'Kurs':>12}  {'Pfad':<40} Beschreibung")
         for x in sorted(hits, key=lambda x: x.name)[:300]:
             price = x.bid or x.last
