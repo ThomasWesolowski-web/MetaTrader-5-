@@ -103,7 +103,7 @@ def run_update(cfg: Config, client, log=print, now_utc_fn=None, symbols=None, ti
             specs[sym] = InstrumentSpec.from_mt5(info)
 
         conversions = []
-        needed = {c for s in specs.values() for c in (s.currency_profit, s.currency_margin)} - {acc_ccy}
+        needed = {c for s in specs.values() for c in (s.currency_profit, s.margin_result_currency)} - {acc_ccy}
         for ccy in sorted(needed):
             c = find_conversion_symbol(all_symbols, acc_ccy, ccy)
             if c is None:

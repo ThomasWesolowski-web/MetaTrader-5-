@@ -93,3 +93,13 @@ def test_validation_against_terminal(make_fake, client_for):
 def test_spec_roundtrip():
     g = gold()
     assert InstrumentSpec.from_dict(g.to_dict()) == g
+
+
+def test_margin_of_price_based_cfd_is_in_profit_currency():
+    btc = gold(symbol="BTCUSD", currency_base="BTC", currency_margin="BTC", contract_size=1.0, margin_rate=25.0)
+    assert btc.margin_result_currency == "USD"
+    rc = RiskCalculator(btc, conv(1.10), "EUR", 500)
+    # 1 Lot x 80 000 USD / 500 x 25 = 4 000 USD = 3 636,36 EUR
+    assert rc.margin(1.0, 80000.0)[0] == pytest.approx(4000 / 1.10)
+    fx = gold(symbol="EURUSD", currency_base="EUR", currency_margin="EUR", calc_mode="FOREX", contract_size=100000)
+    assert fx.margin_result_currency == "EUR"

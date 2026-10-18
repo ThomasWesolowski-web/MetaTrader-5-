@@ -75,6 +75,15 @@ class InstrumentSpec:
             swap_mode=int(info.get("swap_mode", 0)), path=info.get("path", ""),
         )
 
+    @property
+    def margin_result_currency(self) -> str:
+        """Währung, in der die Margin-Formel ihr Ergebnis liefert.
+
+        Formeln mit Preis (CFD, CFDLEVERAGE, CFDINDEX, Aktien) rechnen in Preiseinheiten,
+        also in der Gewinnwährung (z. B. USD bei BTCUSD) – auch wenn MT5 als Marginwährung
+        die Basiswährung (BTC) angibt. Nur Forex-Formeln rechnen in der Basis-/Marginwährung."""
+        return self.currency_margin if self.calc_mode in ("FOREX", "FOREX_NO_LEVERAGE") else self.currency_profit
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -184,7 +193,7 @@ class RiskCalculator:
 
     def margin(self, volume: float, price, times=None):
         m = margin_margin_currency(self.spec, volume, price, self.leverage)
-        return self._to_acc(m, self.spec.currency_margin, times)
+        return self._to_acc(m, self.spec.margin_result_currency, times)
 
     def position_size(self, risk_amount: float, stop_distance: float, time=None) -> float:
         """Volumen, bei dem ein Stop im Abstand stop_distance (Preiseinheiten) höchstens

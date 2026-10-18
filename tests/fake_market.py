@@ -177,7 +177,7 @@ class FakeMT5:
         last = self.m1[sym]["close"].iloc[-1]
         eurusd = self._eurusd()
         tick_value = sp["cs"] * sp["point"] / eurusd
-        return Info(sym, sym, sp["path"], sp["base"], sp["profit"], sp["base"] if sp["calc"] == 0 else sp["profit"],
+        return Info(sym, sym, sp["path"], sp["base"], sp["profit"], "USD" if sym == "XAUUSD" else sp["base"],
                     sp["digits"], sp["point"], sp["cs"], sp["point"], tick_value, 0.01, 100.0, 0.01, 0, 0,
                     sp["calc"], -5.0, 1.0, 1, True, last, last)
 
