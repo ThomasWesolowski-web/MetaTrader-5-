@@ -77,7 +77,7 @@ def _fx_open(utc: pd.DatetimeIndex) -> np.ndarray:
 class FakeMT5:
     TIMEFRAME_M1, TIMEFRAME_M5, TIMEFRAME_M15, TIMEFRAME_M30 = 1, 5, 15, 30
     TIMEFRAME_H1, TIMEFRAME_H4, TIMEFRAME_D1 = 16385, 16388, 16408
-    ORDER_TYPE_BUY = 0
+    ORDER_TYPE_BUY, ORDER_TYPE_SELL = 0, 1
     _CONST_TF = {1: "M1", 5: "M5", 15: "M15", 30: "M30", 16385: "H1", 16388: "H4", 16408: "D1"}
 
     def __init__(self, scheme="ny_close", now_utc="2026-04-20 12:00", days=150, available_bars=None,
@@ -226,7 +226,8 @@ class FakeMT5:
 
     def order_calc_profit(self, action, sym, volume, price_open, price_close):
         sp = self.specs[sym]
-        return round((price_close - price_open) * sp["cs"] * volume / self._eurusd(), 2)
+        sign = 1 if action == self.ORDER_TYPE_BUY else -1
+        return round(sign * (price_close - price_open) * sp["cs"] * volume / self._eurusd(), 2)
 
     def order_calc_margin(self, action, sym, volume, price):
         sp = self.specs[sym]

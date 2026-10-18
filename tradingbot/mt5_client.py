@@ -97,5 +97,8 @@ class MT5Client:
     def calc_profit_buy(self, symbol: str, volume: float, price_open: float, price_close: float) -> float | None:
         return self.mt5.order_calc_profit(self.mt5.ORDER_TYPE_BUY, symbol, volume, price_open, price_close)
 
+    def calc_profit_sell(self, symbol: str, volume: float, price_open: float, price_close: float) -> float | None:
+        return self.mt5.order_calc_profit(self.mt5.ORDER_TYPE_SELL, symbol, volume, price_open, price_close)
+
     def calc_margin_buy(self, symbol: str, volume: float, price: float) -> float | None:
         return self.mt5.order_calc_margin(self.mt5.ORDER_TYPE_BUY, symbol, volume, price)

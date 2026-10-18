@@ -9,7 +9,18 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 |---|---|---|
 | 1 | System prüfen, MT5-Verbindung, Symbole, Bid/Ask, Historie, Prüfbericht | ✅ abgeschlossen – [Ergebnis](docs/phase1_ergebnis.md) |
 | 2 | Datenbasis: Import, Parquet-Speicher, UTC, Qualitätsprüfung, EUR-Risikorechnung | ✅ umgesetzt – [Ergebnis](docs/phase2_ergebnis.md) |
-| 3+ | Backtests, Strategieauswahl, Demo-Handel, Streamlit-Dashboard | ⏸ wartet auf Freigabe |
+| 3 | Strategiebibliothek, Backtests, Walk-Forward, Strategieauswahl | 🔄 Software fertig – Lauf auf PC ausstehend ([Methodik](docs/phase3_ergebnis.md)) |
+| 4+ | Demo-Handel, Streamlit-Dashboard | ⏸ wartet auf Freigabe |
+
+## Phase 3: Backtests (nur Simulation)
+
+```bat
+python daten_aktualisieren.py
+python backtest_ausfuehren.py --prozesse 2 --mt5-abgleich
+```
+
+Ergebnis: `reports\phase3_bericht_*.md` und maschinenlesbar `reports\phase3_ergebnisse.json` (für das Dashboard).
+Optionen: `--zeitrahmen M5 M15`, `--strategien ema_trend mss`, `--symbole XAUUSD`.
 
 ## Phase 2: Datenbasis aufbauen und aktualisieren
 

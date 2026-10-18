@@ -57,6 +57,7 @@ class InstrumentSpec:
     swap_mode: int
     margin_rate: float = 1.0   # kalibriert gegen MT5 (order_calc_margin)
     path: str = ""
+    swap_rollover3days: int = 3  # Wochentag (MT5: 0 = Sonntag) mit dreifachem Swap
 
     @classmethod
     def from_mt5(cls, info: dict) -> "InstrumentSpec":
@@ -73,6 +74,7 @@ class InstrumentSpec:
             calc_mode=CALC_MODES.get(int(info.get("trade_calc_mode", 2)), str(info.get("trade_calc_mode"))),
             swap_long=float(info.get("swap_long", 0.0)), swap_short=float(info.get("swap_short", 0.0)),
             swap_mode=int(info.get("swap_mode", 0)), path=info.get("path", ""),
+            swap_rollover3days=int(info.get("swap_rollover3days", 3)),
         )
 
     @property
