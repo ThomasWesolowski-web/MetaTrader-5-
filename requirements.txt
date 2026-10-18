@@ -5,3 +5,4 @@ pandas>=2.1
 pyarrow>=14
 tzdata>=2024.1     # Zeitzonendaten (unter Windows nicht im Betriebssystem enthalten)
 pytest>=8
+streamlit>=1.50      # Dashboard (Phase 4)

@@ -28,6 +28,37 @@ class QualityConfig:
 
 
 @dataclass
+class PaperCandidate:
+    """Ein beobachteter Parametersatz (Paper-Trading, Phase 4) – Parameter unverändert aus Phase 3."""
+    symbol: str
+    timeframe: str
+    strategy: str
+    params: dict
+
+    @property
+    def key(self) -> str:
+        return f"{self.symbol}_{self.timeframe}_{self.strategy}"
+
+
+def _default_candidates() -> list[PaperCandidate]:
+    # Forschungskandidat "Bitcoin-Trendfolge auf M30/H1" aus Phase 3 (docs/phase3_ergebnis.md)
+    return [PaperCandidate("BTCUSD", "H1", "kombi_breakout_momentum", {"n": 55, "rr": 3.0}),
+            PaperCandidate("BTCUSD", "H1", "donchian_breakout", {"n": 55, "atr_mult": 2.5}),
+            PaperCandidate("BTCUSD", "H1", "ema_trend", {"fast": 50, "slow": 200, "atr_mult": 3.0}),
+            PaperCandidate("BTCUSD", "M30", "ema_trend", {"fast": 50, "slow": 200, "atr_mult": 3.0})]
+
+
+@dataclass
+class PaperConfig:
+    candidates: list[PaperCandidate] = field(default_factory=_default_candidates)
+    interval_s: int = 60            # Sekunden zwischen zwei Durchläufen
+    warmup_bars: int = 3000         # Kerzen vor Beobachtungsbeginn für die Indikatoren (EMA 200 eingeschwungen)
+    stale_after_s: int = 300        # Tick älter als das: keine aktuellen Kurse (Markt geschlossen/keine Verbindung)
+    max_delay_s: int = 300          # Signal später als das nach Kerzenschluss erkannt: nicht gehandelt ("verspätet")
+    cost_scenario: str = "konservativ"   # wie die Auswahl in Phase 3
+
+
+@dataclass
 class Config:
     data_root: Path = Path("data")
     report_dir: Path = Path("reports")
@@ -44,6 +75,7 @@ class Config:
     server_timezone: str = "auto"
     timezone_reference_symbol: str = "XAUUSD"
     quality: QualityConfig = field(default_factory=QualityConfig)
+    paper: PaperConfig = field(default_factory=PaperConfig)
 
     def calendar_for(self, symbol: str) -> str:
         return self.calendars.get(symbol, "24x7")
@@ -85,4 +117,17 @@ def load_config(path: str | Path | None = None) -> Config:
         if not hasattr(cfg.quality, k):
             raise ValueError(f"Unbekannte Einstellung [quality].{k}")
         setattr(cfg.quality, k, type(getattr(cfg.quality, k))(v))
+
+    pp = raw.get("paper", {})
+    if "candidates" in pp:
+        cfg.paper.candidates = [PaperCandidate(str(c["symbol"]), str(c["timeframe"]), str(c["strategy"]),
+                                               dict(c.get("params", {}))) for c in pp["candidates"]]
+    for k in ("interval_s", "warmup_bars", "stale_after_s", "max_delay_s", "cost_scenario"):
+        if k in pp:
+            setattr(cfg.paper, k, type(getattr(cfg.paper, k))(pp[k]))
+    unknown = set(pp) - {"candidates", "interval_s", "warmup_bars", "stale_after_s", "max_delay_s", "cost_scenario"}
+    if unknown:
+        raise ValueError(f"Unbekannte Einstellung [paper].{sorted(unknown)[0]}")
+    for c in cfg.paper.candidates:
+        seconds(c.timeframe)
     return cfg

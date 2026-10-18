@@ -1,7 +1,7 @@
 # Trading-Software Gold & Bitcoin (MetaTrader 5)
 
 Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schrittweise entwickelt wird.
-**Aktueller Stand: Phase 3 abgeschlossen, Phase 4 wartet auf Freigabe. Es werden keine Trades ausgeführt.**
+**Aktueller Stand: Phase 4 – Dashboard und Beobachtung (Paper-Trading) umgesetzt. Es werden keine Trades ausgeführt und keine Orders gesendet.**
 
 ## Phasen
 
@@ -10,7 +10,29 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 | 1 | System prüfen, MT5-Verbindung, Symbole, Bid/Ask, Historie, Prüfbericht | ✅ abgeschlossen – [Ergebnis](docs/phase1_ergebnis.md) |
 | 2 | Datenbasis: Import, Parquet-Speicher, UTC, Qualitätsprüfung, EUR-Risikorechnung | ✅ umgesetzt – [Ergebnis](docs/phase2_ergebnis.md) |
 | 3 | Strategiebibliothek, Backtests, Walk-Forward, Strategieauswahl | ✅ abgeschlossen – 120/120 Testeinheiten, keine Strategie geeignet ([Ergebnis](docs/phase3_ergebnis.md)) |
-| 4+ | Demo-Handel, Streamlit-Dashboard | ⏸ wartet auf Freigabe |
+| 4 | Streamlit-Dashboard, Beobachtung (Paper-Trading) der BTC-Trendfolge-Kandidaten, Kontrakt-/Mindestlotprüfung | 🔄 Punkte 1 und 2 umgesetzt – [Arbeitsplan](docs/phase4_arbeitsplan.md), [Ergebnis](docs/phase4_ergebnis.md); Punkt 3 offen, Punkt 4 zurückgestellt |
+| 5+ | Demo-Handel | ⏸ nicht freigegeben |
+
+## Phase 4: Dashboard und Beobachtung (keine Orders)
+
+```bat
+pip install -r requirements.txt
+python daten_aktualisieren.py
+python beobachtung_ausfuehren.py
+```
+
+Die Beobachtung läuft dauerhaft (ein Durchlauf pro Minute, Strg+C beendet) und protokolliert Signale,
+hypothetische Ein- und Ausstiege, Kosten und Ergebnisse unter `data\paper\`. Nach einem Neustart setzt sie fort.
+Optionen (`python beobachtung_ausfuehren.py --help`): `--einmal` (ein Durchlauf), `--intervall` (Sekunden),
+`--status` (Stand anzeigen ohne MT5), `--config`.
+
+Dashboard in einem zweiten Fenster (öffnet sich im Browser):
+
+```bat
+streamlit run dashboard.py
+```
+
+Bereiche: Übersicht · Backtest (Phase 3) · Live-Beobachtung (Paper-Trading) · Daten · Kontrakt & Mindestlot.
 
 ## Phase 3: Backtests (nur Simulation)
 

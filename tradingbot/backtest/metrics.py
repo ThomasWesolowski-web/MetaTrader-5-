@@ -22,11 +22,15 @@ def compute(res: AccountResult, initial: float, start: pd.Timestamp | None = Non
     n = len(tr)
     skipped = {**(raw_skipped or {}), **res.skipped}
     attempted = n + res.skipped.get("min_lot", 0)
+    # Drawdown in Kontowährung aus derselben realisierten Kontokurve wie der Drawdown in % (Spitze inkl. Startkapital)
+    eq_curve = np.concatenate([[initial], tr["equity_after"].to_numpy(dtype=float)]) if n else np.array([initial])
+    dd_eur = float(np.max(np.maximum.accumulate(eq_curve) - eq_curve))
     base = {
         "trades": n,
         "net_profit_eur": _safe(res.equity_end - initial, 2),
         "return_pct": _safe(100 * (res.equity_end / initial - 1), 2),
         "max_drawdown_pct": _safe(100 * res.max_dd_pct, 2),
+        "max_drawdown_eur": _safe(dd_eur, 2),
         "dd_limit_breached": res.dd_breach_time is not None,
         "dd_breach_time": res.dd_breach_time,
         "daily_loss_lock_days": res.daily_lock_days,

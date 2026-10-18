@@ -32,3 +32,37 @@ spike_z = 8.0
 range_factor = 25.0
 window = 1000
 recurring_min_weeks = 3
+
+[paper]
+# Phase 4 – Beobachtung (Paper-Trading): keine Orders, nur Protokoll. Risiko und Kapital sind NICHT hier
+# einstellbar (fest: 1 000 € Referenzkapital, 0,25 % je Trade, 1 % Tagesverlust, max. 2 Positionen).
+interval_s = 60          # Sekunden zwischen zwei Durchläufen
+warmup_bars = 3000       # Kerzen vor Beobachtungsbeginn für die Indikatoren
+stale_after_s = 300      # älterer Tick = keine aktuellen Kurse
+max_delay_s = 300        # später erkannte Signale werden nicht gehandelt (Programm lief nicht)
+cost_scenario = "konservativ"
+
+# Forschungskandidat "Bitcoin-Trendfolge auf M30/H1" aus Phase 3 – Parameter unverändert
+[[paper.candidates]]
+symbol = "BTCUSD"
+timeframe = "H1"
+strategy = "kombi_breakout_momentum"
+params = { n = 55, rr = 3.0 }
+
+[[paper.candidates]]
+symbol = "BTCUSD"
+timeframe = "H1"
+strategy = "donchian_breakout"
+params = { n = 55, atr_mult = 2.5 }
+
+[[paper.candidates]]
+symbol = "BTCUSD"
+timeframe = "H1"
+strategy = "ema_trend"
+params = { fast = 50, slow = 200, atr_mult = 3.0 }
+
+[[paper.candidates]]
+symbol = "BTCUSD"
+timeframe = "M30"
+strategy = "ema_trend"
+params = { fast = 50, slow = 200, atr_mult = 3.0 }

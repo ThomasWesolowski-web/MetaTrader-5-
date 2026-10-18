@@ -1,0 +1,7 @@
+# Dashboard (Phase 4): keine Nutzungsstatistiken an Streamlit senden, nur lokal erreichbar
+[browser]
+gatherUsageStats = false
+
+[server]
+address = "localhost"
+headless = true

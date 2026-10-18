@@ -140,3 +140,16 @@ def test_account_uses_same_formulas_as_mt5_validated_calculator(spec):
     t = res.trades.iloc[0]
     rc = RiskCalculator(spec, conv(), "EUR", 500)
     assert t.pnl_eur == pytest.approx(float(rc.pnl(-1, t.volume, px, px * 0.999)[0]))
+
+
+def test_drawdown_in_eur_matches_percent_curve():
+    from tradingbot.backtest.metrics import compute
+    # +8 €, dann 3 × −2 € (je 0,02 Lot), dann +4 €: Spitze 1008 €, Tief 1002 € -> DD 6,00 € = 0,595 %
+    tr = [("2026-03-02 10:00", "2026-03-02 12:00", 1, 4000.0, 4005.0, 3998.75)]
+    tr += [("2026-03-0%d 10:00" % d, "2026-03-0%d 11:00" % d, 1, 4000.0, 3998.75, 3998.75) for d in (3, 4, 5)]
+    tr += [("2026-03-06 10:00", "2026-03-06 11:00", 1, 4000.0, 4002.5, 3998.75)]
+    res = acct(raw(tr))
+    m = compute(res, 1000.0)
+    assert m["max_drawdown_eur"] == pytest.approx(6.0)
+    assert m["max_drawdown_pct"] == pytest.approx(100 * 6.0 / 1008.0, abs=0.01)
+    assert compute(acct(raw([])), 1000.0)["max_drawdown_eur"] == 0.0

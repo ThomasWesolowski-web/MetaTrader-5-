@@ -469,8 +469,8 @@ def rank(jobs: list[dict]) -> dict:
 def _brief(m):
     if not m:
         return None
-    keys = ("trades", "net_profit_eur", "return_pct", "max_drawdown_pct", "profit_factor", "win_rate_pct",
-            "expectancy_eur", "expectancy_r", "t_stat", "sharpe", "avg_hold_hours", "positive_years_pct",
+    keys = ("trades", "net_profit_eur", "return_pct", "max_drawdown_pct", "max_drawdown_eur", "profit_factor",
+            "win_rate_pct", "expectancy_eur", "expectancy_r", "t_stat", "sharpe", "avg_hold_hours", "positive_years_pct",
             "min_lot_skip_pct", "dd_limit_breached")
     return {k: m.get(k) for k in keys}
 
