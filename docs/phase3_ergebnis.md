@@ -9,8 +9,9 @@ Maschinenlesbar: `docs/phase3_zusammenfassung.json` (kompakt, für das Dashboard
 ## 1. Vorbereitung
 
 - **Bestehende Tests:** alle 75 Tests aus Phase 1/2 bestanden (vor Beginn der Strategieentwicklung).
-- **Korrigierte Datenqualitätsprüfung:** muss auf dem PC laufen (`python daten_aktualisieren.py`), da die
-  Kursdaten nur dort liegen. Ergebnisse folgen im Abschnitt [Datenqualität](#datenqualität-erneute-prüfung).
+- **Korrigierte Datenqualitätsprüfung:** auf dem PC ausgeführt (Datenbericht 18.10.2026, 14:29 UTC); Ergebnisse im
+  Abschnitt [Datenqualität](#datenqualität-erneute-prüfung). Dabei wurden drei weitere Fehler der Prüfung gefunden und
+  behoben (siehe Phase-2-Korrektur).
 
 ## 2. Strategiebibliothek
 
