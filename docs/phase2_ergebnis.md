@@ -137,6 +137,34 @@ fälschlich als „Tagespause“ eingestuft; die Gewinnvalidierung wurde durch d
 
 ## Echte Daten (VantageMarkets-Demo)
 
-*Ausstehend – wird nach dem ersten Lauf auf dem PC aus `reports/phase2_datenbericht_*.md` ergänzt:*
-tatsächliche Historientiefe je Symbol und Zeitrahmen, erkanntes Zeitschema, unerklärte Lücken,
-Ausreißer, Abgleich der EUR-Berechnung mit dem Terminal.
+### Erster Lauf (18.10.2026) – Import
+
+„Max. Balken im Chart“ wurde vorher auf „Unbegrenzt“ gestellt. Alle Reihen wurden bis zum tatsächlichen
+Historienende geladen, ohne Fehler.
+
+| Symbol | M1 | M5 | M15 | M30 | H1 | H4 | D1 | Historie ab (UTC) |
+|---|---|---|---|---|---|---|---|---|
+| XAUUSD | 2 867 052 | 578 980 | 196 930 | 101 421 | 53 669 | 16 158 | 5 104 | 22.06.2007 |
+| BTCUSD | 3 620 637 | 734 410 | 247 833 | 125 552 | 64 309 | 16 207 | 2 802 | 01.01.2018 |
+| EURUSD | 9 780 005 | 1 991 445 | 664 883 | 332 644 | 166 449 | 41 723 | 6 962 | 02.01.2000 |
+
+- **Zeitschema:** `ny_close` (New York + 7 h; aktuell UTC+3, ab US-Winterzeit UTC+2), erkannt über
+  Goldpause + Live-Abstand, Sicherheit **hoch**. Damit ist die Phase-1-Beobachtung „GMT+3“ bestätigt –
+  aber nur für die US-Sommerzeit; im Winter gilt UTC+2.
+- Gegenüber Phase 1 (50 000 Kerzen pro Abfrage) reicht M1 jetzt 19 Jahre (Gold) bzw. fast 9 Jahre (Bitcoin) zurück.
+
+### Im ersten Lauf gefundene Fehler (behoben)
+
+1. **BTCEUR wurde unnötig als Umrechnungssymbol geladen.** Ursache: Für die Margin wurde die von MT5
+   gemeldete Marginwährung (BTC) umgerechnet. Bei Preis-CFDs liefert die Margin-Formel aber Preiseinheiten
+   (USD). Behoben; der Ordner `data/market/BTCEUR` kann gelöscht werden.
+2. **Speicherfehler (MemoryError) in der Qualitätsprüfung.** Ursache: Die komplette Zeitspalte wurde in
+   Python-Objekte umgewandelt (bei Zeitzonen-Daten erzeugt pandas dabei Millionen Einzelobjekte).
+   Gemessen bei 3,6 Mio. Kerzen: zusätzlicher Speicher 450 MB → 30 MB, Laufzeit halbiert.
+3. **Umrechnungssymbole** werden nur noch in M5/H1/D1 geladen und geprüft (`conversion_timeframes`);
+   M5 genügt für die EUR-Umrechnung (Fehler ≈ 0,02 %). Die bereits geladenen EURUSD-Ordner M1, M15, M30
+   und H4 werden nicht mehr verwendet und können gelöscht werden.
+
+### Qualitätsprüfung und Berechnungsabgleich
+
+*Ausstehend – folgt aus dem zweiten Lauf mit der korrigierten Version.*

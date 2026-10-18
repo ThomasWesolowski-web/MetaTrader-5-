@@ -137,11 +137,11 @@ class CurrencyConverter:
         self.rates = rates or {}
 
     @classmethod
-    def from_store(cls, store, symbols: list[dict]) -> "CurrencyConverter":
+    def from_store(cls, store, symbols: list[dict], timeframes=("M5", "H1", "D1")) -> "CurrencyConverter":
         rates = {}
         for s in symbols:
             parts = []
-            for tf in store.timeframes(s["symbol"]):
+            for tf in [t for t in store.timeframes(s["symbol"]) if t in timeframes]:
                 df = store.load(s["symbol"], tf)
                 if not df.empty:
                     end = pd.DatetimeIndex(df["time"]).as_unit("ns").asi8 + seconds(tf) * 10**9

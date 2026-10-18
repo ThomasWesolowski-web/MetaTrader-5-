@@ -33,6 +33,8 @@ class Config:
     report_dir: Path = Path("reports")
     symbols: list[str] = field(default_factory=lambda: ["XAUUSD", "BTCUSD"])
     timeframes: list[str] = field(default_factory=lambda: ["M1", "M5", "M15", "M30", "H1", "H4", "D1"])
+    # Umrechnungssymbole (z. B. EURUSD) brauchen keine M1-Daten: M5 genügt für die EUR-Umrechnung
+    conversion_timeframes: list[str] = field(default_factory=lambda: ["M5", "H1", "D1"])
     # Handelskalender je Symbol (siehe sessions.CALENDARS)
     calendars: dict[str, str] = field(default_factory=lambda: {"XAUUSD": "cme_metals", "BTCUSD": "24x7"})
     terminal_path: str | None = None
@@ -63,9 +65,10 @@ def load_config(path: str | Path | None = None) -> Config:
     cfg.report_dir = base / data.get("report_dir", str(cfg.report_dir))
     cfg.symbols = list(data.get("symbols", cfg.symbols))
     cfg.timeframes = list(data.get("timeframes", cfg.timeframes))
+    cfg.conversion_timeframes = list(data.get("conversion_timeframes", cfg.conversion_timeframes))
     cfg.chunk_bars = int(data.get("chunk_bars", cfg.chunk_bars))
     cfg.earliest = str(data.get("earliest", cfg.earliest))
-    for tf in cfg.timeframes:
+    for tf in cfg.timeframes + cfg.conversion_timeframes:
         seconds(tf)
 
     mt5 = raw.get("mt5", {})

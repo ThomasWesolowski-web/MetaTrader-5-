@@ -123,9 +123,11 @@ def run_update(cfg: Config, client, log=print, now_utc_fn=None, symbols=None, ti
 
         importer = Importer(client, store, det.scheme, cfg.chunk_bars, cfg.earliest, now_utc_fn=now_utc_fn, log=log)
         results = []
+        conv_tfs = [tf for tf in cfg.conversion_timeframes if tf in timeframes] or cfg.conversion_timeframes
         for sym in list(specs) + conv_syms:
-            importer.ensure_scheme(sym, timeframes)
-            for tf in timeframes:
+            sym_tfs = conv_tfs if sym in conv_syms else timeframes
+            importer.ensure_scheme(sym, sym_tfs)
+            for tf in sym_tfs:
                 r = importer.update(sym, tf)
                 log(f"  {sym:<8} {tf:<4} +{r.new_rows:>8} neu  gesamt {r.rows_total:>9}  ab {str(r.first_utc)[:16]}"
                     f"  ({r.requests} Abfragen{', Historie vollständig geladen' if r.history_exhausted else ''})"
@@ -160,13 +162,17 @@ def run_quality(cfg: Config, symbols=None, timeframes=None) -> dict:
     timeframes = timeframes or cfg.timeframes
     results, consistency = [], {}
     for sym in symbols:
-        cal = get_calendar(cfg.calendars.get(sym, "fx_24x5" if sym in conv_syms else "24x7"))
-        m1 = store.load(sym, "M1") if "M1" in timeframes else pd.DataFrame()
-        for tf in timeframes:
+        is_conv = sym in conv_syms and sym not in cfg.symbols
+        cal = get_calendar(cfg.calendars.get(sym, "fx_24x5" if is_conv else "24x7"))
+        sym_tfs = [tf for tf in timeframes if not is_conv or tf in cfg.conversion_timeframes]
+        m1 = store.load(sym, "M1") if "M1" in sym_tfs else pd.DataFrame()
+        for tf in sym_tfs:
             df = m1 if tf == "M1" else store.load(sym, tf)
             if df.empty:
                 continue
             results.append(check_bars(df, sym, tf, cal, cfg.quality))
             if tf != "M1" and not m1.empty:
                 consistency[f"{sym} {tf}"] = consistency_with_m1(m1, df, tf)
+            del df
+        del m1  # Speicher freigeben, bevor das nächste Symbol geladen wird
     return {"results": results, "consistency": consistency, "specs": doc}

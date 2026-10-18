@@ -170,7 +170,9 @@ def detect_anomalies(df: pd.DataFrame, tf: str, cfg: QualityConfig) -> pd.DataFr
         return pd.DataFrame(columns=["time", "kind", "value", "score", "close", "prev_close"])
     idx = np.array([o[0] for o in out])
     res = pd.DataFrame({
-        "time": df["time"].to_numpy()[idx], "kind": [o[1] for o in out],
+        # nur die betroffenen Zeilen auswählen – to_numpy() auf der ganzen Spalte würde bei
+        # Zeitzonen-Daten Millionen Python-Objekte erzeugen (Speicherfehler bei ~10 Mio. Kerzen)
+        "time": df["time"].iloc[idx].reset_index(drop=True), "kind": [o[1] for o in out],
         "value": np.round([o[2] for o in out], 6), "score": np.round([o[3] for o in out], 1),
         "close": np.round(close[idx], 6), "prev_close": np.round(close[np.maximum(idx - 1, 0)], 6),
     })

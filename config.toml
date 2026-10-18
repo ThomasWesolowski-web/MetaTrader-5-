@@ -9,6 +9,7 @@ root = "data"                 # lokale Parquet-Datenbank
 report_dir = "reports"
 symbols = ["XAUUSD", "BTCUSD"]
 timeframes = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
+conversion_timeframes = ["M5", "H1", "D1"]   # für Umrechnungssymbole wie EURUSD
 chunk_bars = 40000            # Kerzen pro Abfrage (Phase 1: 100 000 abgelehnt, 50 000 funktionierten)
 earliest = "2000-01-01"       # weiter zurück wird nicht gesucht
 

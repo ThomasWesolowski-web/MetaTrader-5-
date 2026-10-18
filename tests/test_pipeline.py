@@ -19,9 +19,11 @@ def test_end_to_end(make_fake, client_for, tmp_path, capsys):
     assert specs["time_scheme"]["scheme"] == "ny_close"
     assert [c["symbol"] for c in specs["conversions"]] == ["EURUSD"]
     assert set(specs["instruments"]) == {"XAUUSD", "BTCUSD"}
-    for sym in ("XAUUSD", "BTCUSD", "EURUSD"):
+    for sym in ("XAUUSD", "BTCUSD"):
         for tf in ("M1", "M5", "M15", "M30", "H1", "H4", "D1"):
             assert list((tmp_path / "data" / "market" / sym / tf).glob("*.parquet")), (sym, tf)
+    assert sorted(p.name for p in (tmp_path / "data" / "market" / "EURUSD").iterdir() if p.is_dir()) == \
+        ["D1", "H1", "M5"]                     # Umrechnungssymbol nur in M5/H1/D1
     reports = list((tmp_path / "reports").glob("phase2_datenbericht_*.md"))
     assert reports and "Datenbestand und Qualität" in reports[0].read_text(encoding="utf-8")
 
