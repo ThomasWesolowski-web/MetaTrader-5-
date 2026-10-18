@@ -1,3 +1,7 @@
-# Phase 1 (Windows, 64-bit Python)
-MetaTrader5>=5.0.45
+# Python 3.11 oder neuer, 64-bit
+MetaTrader5>=5.0.45; sys_platform == "win32"
 numpy>=1.24
+pandas>=2.1
+pyarrow>=14
+tzdata>=2024.1     # Zeitzonendaten (unter Windows nicht im Betriebssystem enthalten)
+pytest>=8

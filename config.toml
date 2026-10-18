@@ -1,0 +1,33 @@
+# Einstellungen der Trading-Software (Phase 2: Datenbasis)
+
+[mt5]
+# Pfad zu terminal64.exe – leer lassen, um das laufende/zuletzt genutzte Terminal zu verwenden
+terminal_path = ""
+
+[data]
+root = "data"                 # lokale Parquet-Datenbank
+report_dir = "reports"
+symbols = ["XAUUSD", "BTCUSD"]
+timeframes = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
+chunk_bars = 40000            # Kerzen pro Abfrage (Phase 1: 100 000 abgelehnt, 50 000 funktionierten)
+earliest = "2000-01-01"       # weiter zurück wird nicht gesucht
+
+[timezone]
+# "auto" = aus den Daten erkennen (empfohlen). Fest: "ny_close" (UTC+2/+3 nach US-Sommerzeit),
+# "eu_dst" (UTC+2/+3 nach EU-Sommerzeit) oder "fixed:+03:00"
+server = "auto"
+reference_symbol = "XAUUSD"   # Symbol mit fester täglicher Handelspause (für die Erkennung)
+
+[calendars]
+# Handelskalender je Symbol: "cme_metals" (Gold, New Yorker Handelszeiten) oder "24x7"
+XAUUSD = "cme_metals"
+BTCUSD = "24x7"
+
+[quality]
+session_tolerance_min = 20
+low_activity_max_min = 5
+outlier_z = 15.0
+spike_z = 8.0
+range_factor = 25.0
+window = 1000
+recurring_min_weeks = 3

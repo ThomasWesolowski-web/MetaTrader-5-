@@ -1,19 +1,41 @@
 # Trading-Software Gold & Bitcoin (MetaTrader 5)
 
 Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schrittweise entwickelt wird.
-**Aktueller Stand: Phase 1 – technische Bestandsaufnahme. Es werden keine Trades ausgeführt.**
+**Aktueller Stand: Phase 2 – Datenbasis. Es werden keine Trades ausgeführt.**
 
 ## Phasen
 
 | Phase | Inhalt | Status |
 |---|---|---|
 | 1 | System prüfen, MT5-Verbindung, Symbole, Bid/Ask, Historie, Prüfbericht | ✅ abgeschlossen – [Ergebnis](docs/phase1_ergebnis.md) |
-| 2+ | Daten, Backtests, Strategieauswahl, Demo-Handel, Streamlit-Dashboard | ⏸ wartet auf Freigabe |
+| 2 | Datenbasis: Import, Parquet-Speicher, UTC, Qualitätsprüfung, EUR-Risikorechnung | ✅ umgesetzt – [Ergebnis](docs/phase2_ergebnis.md) |
+| 3+ | Backtests, Strategieauswahl, Demo-Handel, Streamlit-Dashboard | ⏸ wartet auf Freigabe |
+
+## Phase 2: Datenbasis aufbauen und aktualisieren
+
+```bat
+.venv\Scripts\activate
+pip install -r requirements.txt
+python daten_aktualisieren.py
+```
+
+Beim ersten Start wird die gesamte verfügbare Historie von XAUUSD, BTCUSD und dem Umrechnungssymbol
+(EURUSD) in allen Zeitrahmen geladen, danach bei jedem Start nur das Fehlende. Die Daten liegen in
+`data\market\<Symbol>\<Zeitrahmen>\<Jahr>.parquet`, der Bericht in `reports\phase2_datenbericht_*.md`.
+
+```bat
+:: nur bestimmte Symbole/Zeitrahmen
+python daten_aktualisieren.py --symbole XAUUSD --zeitrahmen H1 D1
+:: nur die lokalen Daten prüfen (ohne MT5)
+python daten_aktualisieren.py --nur-pruefung
+```
+
+Einstellungen: `config.toml`. Aufbau des Pakets: siehe [docs/phase2_ergebnis.md](docs/phase2_ergebnis.md).
 
 ## Phase 1 auf dem Windows-PC ausführen
 
 Voraussetzungen:
-- Windows 10/11, **64-bit Python 3.9 oder neuer** (python.org; bei der Installation „Add to PATH“ anhaken)
+- Windows 10/11, **64-bit Python 3.11 oder neuer** (python.org; bei der Installation „Add to PATH“ anhaken)
 - MetaTrader-5-Terminal installiert, **geöffnet und mit dem Demokonto eingeloggt**
 
 In der Eingabeaufforderung (cmd) im Projektordner:
@@ -63,8 +85,9 @@ Die einzige Änderung am Terminal: Gefundene Symbole werden in die Marktübersic
 ## Tests (ohne MT5, auch unter Linux)
 
 ```bash
-python -m unittest discover tests
+python -m pytest
 ```
 
-`tests/fake_mt5/MetaTrader5.py` simuliert die MT5-API mit Fake-Daten und bricht ab, sobald eine
-Order-Funktion aufgerufen wird.
+`tests/fake_market.py` simuliert einen MT5-Markt (Serverzeit mit Sommerzeit, Handelszeiten, Feiertage,
+Lücken, Fehlticks, begrenzte Historie); `tests/fake_mt5/` ist das einfache Fake-Modul für Phase 1.
+Beide brechen ab, sobald eine Order-Funktion aufgerufen wird.
