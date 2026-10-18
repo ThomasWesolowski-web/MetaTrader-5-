@@ -80,3 +80,24 @@ def test_periods_start_after_long_data_hole(tmp_path):
     res = run_job(cfg, "XAUUSD", "H1", ["ema_trend"], log=lambda *a: None)
     assert res["periods"]["start"] >= "2019-01-01"
     assert min(res["bars_per_year"]) >= "2019"
+
+
+def test_periods_start_where_data_becomes_dense(tmp_path):
+    """Regressionstest: Dünne frühe Historie (nur ein Teil der Handelsstunden vorhanden) darf nicht im
+    Trainingszeitraum liegen (Fall Gold-Intraday bei Vantage)."""
+    import numpy as np
+    from tradingbot.backtest.runner import run_job
+    from tradingbot.config import Config
+    from tradingbot.server_time import parse_scheme
+    st = synthetic_store.build(tmp_path / "data", start="2018-01-01", end="2024-01-01", tfs=("H1", "D1"))
+    h1 = st.load("XAUUSD", "H1")
+    early = (h1["time"] < "2020-01-01").to_numpy()
+    keep = ~early | (np.arange(len(h1)) % 3 == 0)
+    for f in (tmp_path / "data" / "market" / "XAUUSD" / "H1").glob("*.parquet"):
+        f.unlink()
+    st.upsert("XAUUSD", "H1", h1[keep])
+    cfg = Config()
+    cfg.data_root = tmp_path / "data"
+    cfg.conversion_timeframes = ["H1", "D1"]
+    res = run_job(cfg, "XAUUSD", "H1", ["ema_trend"], log=lambda *a: None)
+    assert res["periods"]["start"] >= "2020-01-01"

@@ -138,3 +138,33 @@ def test_multi_year_hole_is_not_a_holiday(fake_ny):
     assert big["category"] == "data_gap" and big["hours"] > 24 * 80
     assert pd.Timestamp(res.summary["continuous_from_utc"]) >= pd.Timestamp("2026-02-20", tz="UTC")
     assert continuous_start(df) == df["time"].iloc[0]
+
+
+def _sparse_early(df, until, keep_every=3):
+    """Vor 'until' nur jede keep_every-te Kerze behalten (dünne Historie wie Gold-Intraday bei Vantage)."""
+    early = df["time"] < until
+    pos = np.arange(len(df))
+    return df[~early | (pos % keep_every == 0)].reset_index(drop=True)
+
+
+def test_long_recurring_gaps_are_not_regular_pauses(fake_ny):
+    """Regressionstest: Wiederkehrende, lange Lücken (fehlende Daten) dürfen nicht als 'regelmäßige Pause'
+    gelten – nur kurze Wartungsfenster (<= 6 h)."""
+    df = frame(fake_ny, "BTCUSD", "H1")
+    hours = pd.DatetimeIndex(df["time"]).hour
+    sparse = df[~((hours >= 2) & (hours < 14))]                 # jeden Tag 12 h ohne Daten
+    res = check_bars(sparse, "BTCUSD", "H1", get_calendar("24x7"), Q)
+    assert res.summary["gaps"].get("recurring_pause", 0) == 0
+    assert res.summary["gaps"]["data_gap"] > 100
+    assert res.summary["coverage_pct"] < 60
+
+
+def test_dense_start_skips_sparse_early_history(fake_ny):
+    from tradingbot.quality import dense_start, monthly_density
+    df = _sparse_early(frame(fake_ny, "XAUUSD", "H1"), "2026-02-01")
+    cal = get_calendar("cme_metals")
+    dens = monthly_density(df, "H1", cal)
+    assert dens.loc["2025-12-01"] < 0.5 < dens.loc["2026-03-01"]
+    assert dense_start(df, "H1", cal) == pd.Timestamp("2026-02-01", tz="UTC")
+    full = frame(fake_ny, "XAUUSD", "H1")
+    assert dense_start(full, "H1", cal) == full["time"].iloc[0]

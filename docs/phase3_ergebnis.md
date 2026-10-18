@@ -1,7 +1,7 @@
 # Phase 3 – Strategieentwicklung, Backtesting und Strategieauswahl
 
 **Stand:** 18.10.2026 · **Nur Simulation:** keine Orders an MetaTrader 5, keine Demo- oder Echtgeld-Trades
-**Status:** Strategiebibliothek, Backtester und Walk-Forward-Auswertung fertig und mit 134 Tests geprüft.
+**Status:** Strategiebibliothek, Backtester und Walk-Forward-Auswertung fertig und mit 137 Tests geprüft.
 **Ausstehend:** Lauf auf dem Windows-PC mit den echten Vantage-Daten. Die Abschnitte
 [Ergebnisse](#ergebnisse-echte-daten) und [Empfehlung](#empfehlung-für-phase-4) werden ausschließlich aus diesem
 Lauf befüllt – es werden keine Ergebnisse angenommen oder geschätzt.
@@ -118,9 +118,22 @@ das Ergebnis ausdrücklich: **aktuell keine Strategie für den Demohandel geeign
 
 ## Datenqualität (erneute Prüfung)
 
-*Ausstehend:* Der mitgeschickte Datenbericht (18.10.2026, 12:59 UTC) stammt noch von **vor** den Korrekturen
-(enthält BTCEUR und die alten Ausreißerzahlen). Die korrigierte Prüfung muss mit `python daten_aktualisieren.py`
-erneut laufen. Dabei wurde inzwischen ein weiterer Fehler behoben (siehe Phase-2-Korrektur zur Gold-Intraday-Historie).
+Datenbericht vom 18.10.2026, 14:13 UTC (korrigierte Version):
+
+| | XAUUSD | BTCUSD | EURUSD |
+|---|---|---|---|
+| Umrechnung | – | – | einziges Umrechnungssymbol (BTCEUR entfällt) |
+| Dichte M1 / H1 | 41 % / 46 % | 78 % / 83 % | 99 % (M5) |
+| größte Lücke | 4,0 Tage | 3,0 Tage | 3,2 Tage |
+| Duplikate / ungültige Kerzen | 0 / 0 | 0 / 0 | 0 / 0 |
+| Konsistenz M5–D1 mit M1 | 100 % | 100 % | – |
+| Ausreißer M1 (nach neuer Skala) | 238 (vorher 658) | 848 (vorher 10 313) | – |
+| Abgleich EUR-Rechnung mit MT5 | +0,013 % | −0,013 % | – |
+
+Die Bitcoin-Ausreißer sanken durch die korrigierte Skala von 10 313 auf 848; Broker-Schließzeiten zu Weihnachten/
+Neujahr und an Wochenenden werden erkannt. Bei Gold zeigte sich die geringe Datendichte (Phase-2-Korrektur);
+die Lückenklassifikation wurde danach nochmals verschärft – die aktualisierten Zahlen (inkl. Dichte je Jahr)
+liefert der nächste Lauf.
 
 ## Ergebnisse (echte Daten)
 
@@ -131,10 +144,12 @@ BTCUSD ist aktuell keine Strategie für den Demohandel geeignet.**
 
 **Bei der Auswertung gefundene Fehler (behoben, mit Regressionstests; erneuter Lauf nötig):**
 
-1. **Gold-Trainingszeitraum lag in einer Datenlücke.** Die Zeiträume wurden ab dem ersten D1-Datum (2007) geteilt;
-   die Gold-Intraday-Daten sind aber erst ab ca. 2017/18 lückenlos. Training (2007–2019) enthielt daher kaum Daten –
-   deshalb gab es für Gold keinerlei Walk-Forward-Ergebnisse. Jetzt beginnen die Zeiträume mit der lückenlosen
-   Historie („lückenlos ab“, Referenz H1).
+1. **Gold-Trainingszeitraum lag in dünnen Daten.** Die Zeiträume wurden ab dem ersten D1-Datum (2007) geteilt;
+   die Gold-Intraday-Daten sind aber über weite Strecken nur teilweise vorhanden (Dichte 41–46 %, siehe
+   Phase-2-Korrektur). Im Training entstanden daher kaum Trades – deshalb gab es für Gold keine
+   Walk-Forward-Ergebnisse. Jetzt beginnen die Zeiträume ab „dicht ab“ (monatliche Dichte, Referenz H1).
+   *Hinweis:* Meine erste Erklärung (ein zehnjähriges Datenloch) war falsch; der neue Datenbericht zeigt keine
+   Lücke über 4 Tage, sondern durchgehend dünne Daten.
 2. **Bitcoin-Trades 2018–2021 verworfen.** Die BTC-Margin wurde direkt über BTCEUR umgerechnet (Historie erst ab
    07/2021); davor fehlte der Kurs und 933 Trades wurden als „Margin“ verworfen. Jetzt werden fehlende Direktkurse
    über BTCUSD × EURUSD ergänzt.

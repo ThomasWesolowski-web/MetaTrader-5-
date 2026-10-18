@@ -27,7 +27,7 @@ from .account import RiskRules, run_account
 from .costs import scenarios_for
 from .engine import simulate
 from .metrics import compute
-from ..quality import continuous_start
+from ..quality import continuous_start, dense_start
 from .walkforward import objective, slice_trades, split_periods, wf_windows
 
 SELECTION_SCENARIO = "konservativ"
@@ -89,13 +89,13 @@ def run_job(cfg: Config, symbol: str, tf: str, strategy_names: list[str] | None 
     # Zeiträume je Markt einheitlich für alle Zeitrahmen: ab Beginn der LÜCKENLOSEN Intraday-Historie
     # (Referenz H1). Frühere, nur vereinzelt vorhandene Kerzen werden nicht verwendet – sonst läge der
     # Trainingszeitraum großteils in einer Datenlücke (bei Gold: Intraday-Lücke ca. 2007–2017).
+    cal = get_calendar(cfg.calendar_for(symbol))
     ref = store.load(symbol, "H1") if tf != "H1" else bars
     ref = ref if not ref.empty else bars
-    first = max(continuous_start(ref), continuous_start(bars))
+    first = max(continuous_start(ref), continuous_start(bars), dense_start(ref, "H1" if ref is not bars else tf, cal))
     last = pd.Timestamp(bars["time"].iloc[-1])
     bars = bars[bars["time"] >= first].reset_index(drop=True)
     periods = split_periods(first.normalize(), last)
-    cal = get_calendar(cfg.calendar_for(symbol))
     scen = scenarios_for(symbol)
     rules = RiskRules()
     tf_s = seconds(tf)

@@ -32,6 +32,7 @@ from .timeframes import seconds
 
 GAP_EXPECTED = ("weekend", "daily_break", "holiday", "low_activity", "recurring_pause")
 HOLIDAY_MAX_OPEN_H = 36
+RECURRING_MAX_H = 6
 NY = "America/New_York"
 
 
@@ -114,7 +115,9 @@ def classify_gaps(df: pd.DataFrame, tf: str, calendar: Calendar, cfg: QualityCon
         ny0 = pd.DatetimeIndex(pd.to_datetime(g_start, utc=True)).tz_convert(NY)
         ny1 = pd.DatetimeIndex(pd.to_datetime(g_end, utc=True)).tz_convert(NY)
         fri = ny0.normalize() - pd.to_timedelta((ny0.weekday - 4) % 7, unit="D") + pd.Timedelta(hours=15)
-        in_weekend = (ny0 >= fri) & (ny1 <= fri + pd.Timedelta(days=2, hours=10)) & (dur_s >= 6 * 3600)
+        # mindestens 24 h: echte Wochenendschließungen bei Vantage dauerten ~24–48 h; kürzere Lücken am
+        # Wochenende sind fehlende Daten
+        in_weekend = (ny0 >= fri) & (ny1 <= fri + pd.Timedelta(days=2, hours=10)) & (dur_s >= 24 * 3600)
         cat[(cat == "data_gap") & np.asarray(in_weekend)] = "weekend"
 
     if seconds(tf) <= 300:
@@ -128,7 +131,9 @@ def classify_gaps(df: pd.DataFrame, tf: str, calendar: Calendar, cfg: QualityCon
     })
 
     # Wiederkehrende Pausen: gleiche Wochentag/Uhrzeit (Serverzeit, 15-Minuten-Raster) und Dauer
-    cand = gaps["category"] == "data_gap"
+    # Nur kurze Pausen (Broker-Wartung). Lange, wiederkehrende Lücken sind fehlende Daten – sie wurden
+    # früher als "regelmäßig" eingestuft (Gold-Intraday: 2 670 Pausen mit zusammen 83 640 h).
+    cand = (gaps["category"] == "data_gap") & (gaps["hours"] <= RECURRING_MAX_H)
     if cand.any():
         ss = gaps.loc[cand, "server_start"].to_numpy()
         minute_of_week = ((ss // 60 + 3 * 24 * 60) % (7 * 24 * 60)) // 15  # 1970-01-01 war Donnerstag
@@ -237,6 +242,42 @@ def continuous_start(df: pd.DataFrame, max_gap_days: float = 14.0) -> pd.Timesta
     return t[gaps[-1] + 1] if len(gaps) else t[0]
 
 
+def monthly_density(df: pd.DataFrame, tf: str, calendar: Calendar) -> pd.Series:
+    """Kerzen je Monat / laut Handelskalender mögliche Kerzen je Monat."""
+    t = pd.DatetimeIndex(df["time"])
+    if len(t) == 0:
+        return pd.Series(dtype=float)
+    tn = t.tz_convert("UTC").tz_localize(None)
+    months = pd.date_range(tn[0].to_period("M").to_timestamp(), tn[-1].to_period("M").to_timestamp(),
+                           freq="MS", tz="UTC")
+    edges = months.append(pd.DatetimeIndex([months[-1] + pd.DateOffset(months=1)]))
+    starts, ends = calendar.open_intervals(edges[0], edges[-1])
+    e_ns = edges.as_unit("ns").asi8
+    open_s = open_seconds_between(starts, ends, e_ns[:-1], e_ns[1:])
+    counts = pd.Series(1, index=tn).groupby(tn.to_period("M")).sum()
+    counts.index = counts.index.to_timestamp().tz_localize("UTC")
+    expected = open_s / seconds(tf)
+    dens = counts.reindex(months).fillna(0).to_numpy() / np.maximum(expected, 1)
+    return pd.Series(np.round(dens, 3), index=months)
+
+
+def dense_start(df: pd.DataFrame, tf: str, calendar: Calendar, rel_threshold: float = 0.6,
+                recent_months: int = 24) -> pd.Timestamp:
+    """Beginn der dichten Historie: erster Monat nach dem letzten Monat, dessen Dichte unter
+    rel_threshold × Median der letzten recent_months Monate liegt (erster und letzter Monat ausgenommen,
+    da nur angeschnitten)."""
+    dens = monthly_density(df, tf, calendar)
+    if len(dens) < 3:
+        return pd.Timestamp(df["time"].iloc[0])
+    inner = dens.iloc[1:-1]
+    ref = float(np.median(inner.iloc[-recent_months:]))
+    low = inner[inner < rel_threshold * ref]
+    if low.empty:
+        return pd.Timestamp(df["time"].iloc[0])
+    start_month = low.index[-1] + pd.DateOffset(months=1)
+    return max(pd.Timestamp(df["time"].iloc[0]), start_month)
+
+
 # ---------------------------------------------------------------------- Gesamtprüfung
 def check_bars(df: pd.DataFrame, symbol: str, tf: str, calendar: Calendar, cfg: QualityConfig) -> QualityResult:
     if df.empty:
@@ -271,6 +312,9 @@ def check_bars(df: pd.DataFrame, symbol: str, tf: str, calendar: Calendar, cfg: 
         "bar_density_pct": round(100 * len(df) / max(1, open_total // tf_s), 1),
         "largest_gap_days": round(float(gaps["hours"].max()) / 24, 1) if not gaps.empty else 0.0,
         "continuous_from_utc": continuous_start(df).isoformat(),
+        "dense_from_utc": dense_start(df, tf, calendar).isoformat(),
+        "density_by_year_pct": {str(y): round(100 * float(v), 1) for y, v in
+                                monthly_density(df, tf, calendar).groupby(lambda x: x.year).mean().items()},
         "spread_median_points": float(np.median(df["spread"])),
         "spread_p95_points": float(np.percentile(df["spread"], 95)),
     }

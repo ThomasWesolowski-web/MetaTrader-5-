@@ -78,7 +78,7 @@ def build_markdown(update: dict | None, quality: dict, created: pd.Timestamp) ->
     res = quality.get("results", [])
     if res:
         L += ["## Datenbestand und Qualität", "",
-              "| Symbol | TF | Kerzen | von (UTC) | lückenlos ab | bis (UTC) | Dichte | größte Lücke (Tage) | Dupl. | ungültig | Lücken (Kategorien) | unerklärt (h Handelszeit) | Abdeckung | Ausreißer |",
+              "| Symbol | TF | Kerzen | von (UTC) | dicht ab | bis (UTC) | Dichte | größte Lücke (Tage) | Dupl. | ungültig | Lücken (Kategorien) | unerklärt (h Handelszeit) | Abdeckung | Ausreißer |",
               "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for q in res:
             s = q.summary
@@ -88,10 +88,19 @@ def build_markdown(update: dict | None, quality: dict, created: pd.Timestamp) ->
             invalid = s["invalid_ohlc"] + s["nonpositive_prices"] + s["nan_rows"] + s["negative_spread"]
             anom = ", ".join(f"{k} {v}" for k, v in s["anomalies"].items()) or "0"
             L.append(f"| {q.symbol} | {q.tf} | {s['rows']} | {_fmt_time(s['first_utc'])} | "
-                     f"{_fmt_time(s.get('continuous_from_utc'))} | {_fmt_time(s['last_utc'])} | "
+                     f"{_fmt_time(s.get('dense_from_utc'))} | {_fmt_time(s['last_utc'])} | "
                      f"{s.get('bar_density_pct')} % | {s.get('largest_gap_days')} | {s['duplicates']} | {invalid} | "
                      f"{gaps} | {s['data_gap_open_hours']} | {s['coverage_pct']} % | {anom} |")
         L.append("")
+        years = sorted({y for q in res for y in (q.summary.get("density_by_year_pct") or {})})
+        if years:
+            L += ["### Datendichte je Jahr (% der laut Handelskalender möglichen Kerzen)", "",
+                  "| Symbol | TF | " + " | ".join(years) + " |", "|---|---|" + "---|" * len(years)]
+            for q in res:
+                dy = q.summary.get("density_by_year_pct") or {}
+                if q.tf in ("M1", "M5", "H1"):
+                    L.append(f"| {q.symbol} | {q.tf} | " + " | ".join(str(dy.get(y, "")) for y in years) + " |")
+            L.append("")
         for q in res:
             ug = q.unexplained_gaps()
             if ug is not None and not ug.empty:
@@ -121,7 +130,8 @@ def build_markdown(update: dict | None, quality: dict, created: pd.Timestamp) ->
           "(z. B. Broker-Wartung), **unerklärt** = möglicher Datenfehler.",
           "- **Abdeckung** = Anteil der Handelszeit ohne unerklärte Lücken. **Dichte** = vorhandene Kerzen / laut "
           "Kalender mögliche Kerzen (M1 typischerweise < 100 %, weil Minuten ohne Ticks keine Kerze haben). "
-          "**lückenlos ab** = erste Kerze nach der letzten Lücke von mehr als 14 Tagen.",
+          "**dicht ab** = erster Monat, ab dem die monatliche Dichte durchgehend mindestens 60 % des Medians der "
+          "letzten 24 Monate erreicht (Backtests beginnen frühestens hier).",
           "- **Ausreißer:** outlier = extreme Rendite, spike = Ausschlag mit sofortiger Rückkehr (Fehltick-Verdacht), "
           "range_outlier = extreme Kerzenspanne. Markiert, nicht verändert.",
           "- Fehlende Kurse werden **nicht** aufgefüllt oder erfunden.", ""]
