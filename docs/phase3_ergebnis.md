@@ -1,9 +1,9 @@
 # Phase 3 – Strategieentwicklung, Backtesting und Strategieauswahl
 
 **Stand:** 18.10.2026 · **Nur Simulation:** keine Orders an MetaTrader 5, keine Demo- oder Echtgeld-Trades
-**Status:** Lauf 2 ausgewertet, **Lauf 3 (Hardware-Modus, alle 120 Einheiten) steht aus**. 160 Tests bestanden.
-**Vorläufiges Ergebnis (Lauf 2, 118/120 Einheiten): Für XAUUSD und BTCUSD ist keine Strategie für den Demohandel
-geeignet.** Fehlend: XAUUSD M1 `liquidity_sweep` und `smc_orderblock` (Speichermangel) – werden in Lauf 3 nachgeholt.
+**Status:** abgeschlossen. **Alle 120 Testeinheiten** ausgewertet (Lauf 3, Hardware-Modus, 18.10.2026, 15:58 UTC);
+keine Testeinheit fehlt, keine Fehler. 160 Tests bestanden.
+**Ergebnis: Für XAUUSD und BTCUSD ist aktuell keine Strategie für den Demohandel geeignet.**
 Maschinenlesbar: `docs/phase3_zusammenfassung.json` (kompakt, für das Dashboard) bzw. vollständig
 `reports/phase3_ergebnisse.json` auf dem PC.
 
@@ -159,25 +159,33 @@ Backtests beginnen deshalb je Markt ab „dicht ab“ – für Gold ab 2018, nic
 
 ## Ergebnisse (echte Daten)
 
-### Lauf 2 (18.10.2026, 15:00 UTC) – maßgeblich
+### Lauf 3 (18.10.2026, 15:58 UTC) – maßgeblich
 
-120 Kombinationen (2 Märkte × 5 Zeitrahmen × 12 Strategien), Laufzeit 15,7 Minuten (2 Prozesse). Zeiträume ab
-dichten Daten, für beide Märkte gleich aufgebaut:
+120 von 120 Testeinheiten (2 Märkte × 5 Zeitrahmen × 12 Strategien) im Hardware-Modus: 1 Prozess, Märkte
+nacheinander, M1 in Blöcken zu 100.000 Kerzen. Laufzeit 25,9 Minuten; freier Arbeitsspeicher nie unter 2,2 GB
+(von 7,9 GB), keine Blockverkleinerung nötig, kein Fehler. Der Testlauf (Blöcke = Gesamtberechnung, Reproduzierbarkeit)
+wurde vorher bestanden.
+
+**Reproduzierbarkeit:** Die 118 Einheiten, die schon in Lauf 2 (2 Prozesse, ohne Blöcke) berechnet wurden, sind in
+Lauf 3 **identisch** (Parameter, Trades, Netto, PF, Drawdown, Erwartungswert in Validierung und Test). Die
+Speicheroptimierungen haben also kein Ergebnis verändert.
+
+Zeiträume ab dichten Daten, für beide Märkte gleich aufgebaut:
 
 | Markt | Training (Walk-Forward + Parameterwahl) | Validierung | Test (nur Bestätigung) |
 |---|---|---|---|
 | XAUUSD | 01.04.2018 – 17.05.2023 | 17.05.2023 – 30.01.2025 | 30.01.2025 – 16.10.2026 |
 | BTCUSD | 01.04.2018 – 18.05.2023 | 18.05.2023 – 01.02.2025 | 01.02.2025 – 18.10.2026 |
 
-**2 von 120 Kombinationen nicht ausgewertet:** XAUUSD M1 `liquidity_sweep` und `smc_orderblock` brachen mit
-Speichermangel ab (2 parallele Prozesse). Beide gehörten in Lauf 1 zu den schlechtesten M1-Kombinationen
-(−0,9 bzw. −1,1 R je Trade im Test); am Gesamtergebnis ändert das nichts.
+**Nachgeholt (in Lauf 2 wegen Speichermangel abgebrochen):** XAUUSD M1 `liquidity_sweep` (Test 1.297 Trades,
+−815,91 €, PF 0,32, DD 81,7 %) und `smc_orderblock` (Test 1.418 Trades, −876,32 €, PF 0,35, DD 87,7 %) – beide
+deutlich verlustreich, am Gesamtergebnis ändert sich nichts.
 
 #### Ergebnis je Markt und Zeitrahmen (konservative Kosten, 0,25 % Risiko)
 
 | Markt | TF | Strategien mit ≥ 20 Test-Trades | davon profitabel | Median Erwartungswert je Trade (R) | dto. Basis-Kosten | Kerzen mit machbarem 1,5-ATR-Stop |
 |---|---|---|---|---|---|---|
-| XAUUSD | M1 | 10 | 0 | −0,27 | −0,07 | 62 % |
+| XAUUSD | M1 | 12 | 0 | −0,28 | −0,08 | 62 % |
 | XAUUSD | M5 | 4 | 0 | −0,36 | −0,15 | 11 % |
 | XAUUSD | M15 | 3 | 0 | −0,34 | −0,11 | 0,1 % |
 | XAUUSD | M30 | 1 | 0 | −0,56 | −0,29 | 0 % |
@@ -188,7 +196,7 @@ Speichermangel ab (2 parallele Prozesse). Beide gehörten in Lauf 1 zu den schle
 | BTCUSD | M30 | 3 | 0 | −0,45 | −0,16 | 12 % |
 | BTCUSD | H1 | 3 | 0 | −0,34 | −0,16 | 2 % |
 
-Walk-Forward (stitched Out-of-Sample im Training, 0,25 % Risiko): nur **4 von 88** Kombinationen mit ≥ 50 Trades
+Walk-Forward (stitched Out-of-Sample im Training, 0,25 % Risiko): nur **4 von 90** Kombinationen mit ≥ 50 Trades
 hatten einen positiven Erwartungswert (BTCUSD M30 EMA-Trend, BTCUSD M30 und H1 Donchian-Breakout, XAUUSD M5
 EMA-Trend), keine mit mehr als 50 % positiven Abschnitten.
 
@@ -252,13 +260,13 @@ Erwartungswert. Die höheren Zeitrahmen, auf denen die Kosten weniger ins Gewich
 
 #### Prüfung gegen MT5
 
-`--mt5-abgleich` (Lauf 2): Gewinn und Margin für 0,01 / 0,1 / 1 Lot, Kauf und Verkauf, max. Abweichung 0,31 %
-(Cent-Rundung von MT5 bei Kleinstbeträgen); bei 1 Lot ≤ 0,02 %.
+`--mt5-abgleich` (Lauf 3): Gewinn und Margin für 0,01 / 0,1 / 1 Lot, Kauf und Verkauf, max. Abweichung 0,34 %
+(Cent-Rundung von MT5 bei Kleinstbeträgen, BTCUSD 0,01 Lot: 1,45 € Margin); bei 1 Lot ≤ 0,02 %.
 
 ### Lauf 1 (18.10.2026, 14:01 UTC) – überholt
 
 Lauf 1 hatte zwei inzwischen behobene Fehler (Gold-Training in praktisch leeren Daten vor 2018, BTC-Margin vor 2021
-ohne Kurs). Seine Testergebnisse (keine profitable Strategie) werden von Lauf 2 bestätigt.
+ohne Kurs). Seine Testergebnisse (keine profitable Strategie) werden von Lauf 2 und 3 bestätigt.
 
 ### Erkannte Schwachstellen
 

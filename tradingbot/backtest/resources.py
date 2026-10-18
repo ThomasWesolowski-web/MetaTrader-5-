@@ -35,8 +35,12 @@ def process_mb() -> float | None:
                         ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
         c = PMC()
         c.cb = ctypes.sizeof(PMC)
-        k32 = ctypes.windll.kernel32
-        ok = ctypes.windll.psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(c), c.cb)
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.GetCurrentProcess.restype = wintypes.HANDLE      # 64-Bit-Handle, nicht als int abschneiden
+        fn = getattr(k32, "K32GetProcessMemoryInfo", None) or ctypes.WinDLL("psapi").GetProcessMemoryInfo
+        fn.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
+        fn.restype = wintypes.BOOL
+        ok = fn(k32.GetCurrentProcess(), ctypes.byref(c), c.cb)
         return c.WorkingSetSize / 2**20 if ok else None
     try:
         with open("/proc/self/status") as f:
