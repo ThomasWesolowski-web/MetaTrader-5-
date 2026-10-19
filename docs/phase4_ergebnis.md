@@ -68,18 +68,20 @@ geändert, wird die Beobachtung nicht vermischt, sondern ein Fehler protokollier
 | Verbindung | ohne Ticks: Ereignis und neuer Verbindungsaufbau; Fehler eines Kandidaten halten die anderen nicht auf |
 | Speicher | ca. **16 MB** zusätzlich zum Python-Grundbedarf, ca. 65 ms je Durchlauf (gemessen mit 4 Kandidaten und 3.000 Kerzen Vorlauf) |
 
-### Automatischer Start (Ergänzung 19.10.2026)
+### Installation und automatischer Start (Ergänzung 19.10.2026)
 
 | Datei | Funktion |
 |---|---|
-| `START.bat` | Doppelklick genügt: richtet beim ersten Start (oder nach einem Umzug auf ein anderes Laufwerk) die Python-Umgebung ein und installiert fehlende Pakete, aktualisiert die Kursdaten, startet Beobachtung und Dashboard in eigenen, minimierten Fenstern (nur wenn sie nicht schon laufen) und öffnet den Browser |
-| `STOP.bat` | beendet die Beobachtung sauber (Stopp-Anforderung, der Stand bleibt gespeichert) und schließt das Dashboard; MT5 bleibt offen |
-| `Verknuepfungen_erstellen.bat` | einmalig: Desktop-Symbole „Trading starten“ und „Trading stoppen“, auf Wunsch Autostart mit Windows |
+| `INSTALLIEREN.bat` | Installer: prüft Python 3.11+ (installiert es bei Bedarf über winget) und MetaTrader 5, fragt den Zielordner ab (Standard `C:\Trading\TradingBot`, jedes Laufwerk möglich, freier Speicher wird angezeigt), beendet eine laufende Beobachtung, kopiert die Programmdateien, übernimmt auf Wunsch Kursdaten, Berichte und Beobachtungsstand aus der bisherigen Installation (Verschieben, auf demselben Laufwerk ohne zusätzlichen Platz), richtet Python-Umgebung und Pakete ein, legt Desktop- und Startmenü-Symbole an, optional Autostart. Erneut ausführen = Aktualisierung |
+| `START.bat` („Trading starten“) | aktualisiert die Kursdaten, startet Beobachtung und Dashboard in eigenen, minimierten Fenstern (nur wenn sie nicht schon laufen) und öffnet den Browser |
+| `STOP.bat` („Trading stoppen“) | beendet die Beobachtung sauber (Stopp-Anforderung, Stand bleibt gespeichert) und schließt das Dashboard; MT5 bleibt offen |
+| `DEINSTALLIEREN.bat` (Startmenü) | entfernt Symbole und Programm; Daten nur nach ausdrücklicher Bestätigung |
 
 Für den Betrieb ohne Aufsicht wurde die Beobachtung robuster gemacht (mit Tests): Sie läuft nie doppelt
 (Sperrdatei), wartet beim Start auf MT5 und versucht es jede Minute erneut, bricht bei einem Fehler in einem
-Durchlauf nicht ab und reagiert innerhalb von Sekunden auf `STOP.bat`. Die `.bat`-Dateien konnten nur in der
-Entwicklungsumgebung (Linux) geprüft werden, nicht unter Windows ausgeführt.
+Durchlauf nicht ab und reagiert innerhalb von Sekunden auf „Trading stoppen“. Die Installations- und Startdateien
+konnten in der Entwicklungsumgebung nur auf Syntax und Aufbau geprüft werden (PowerShell-Parser, Zeilenenden,
+Zeichensatz), nicht unter Windows ausgeführt.
 
 ## 3. Kapital und Risiko – Prüfung (Punkt 3, Entscheidung offen)
 

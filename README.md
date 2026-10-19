@@ -15,11 +15,19 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 
 ## Phase 4: Dashboard und Beobachtung (keine Orders)
 
-**Einfachster Weg:** `START.bat` doppelklicken. Beim ersten Mal wird die Python-Umgebung eingerichtet; danach
-werden Kursdaten aktualisiert, die Beobachtung und das Dashboard in eigenen (minimierten) Fenstern gestartet und
-der Browser geöffnet. `STOP.bat` beendet beides sauber. `Verknuepfungen_erstellen.bat` (einmalig) legt die Symbole
-„Trading starten“/„Trading stoppen“ auf den Desktop und richtet auf Wunsch den Autostart mit Windows ein.
-MetaTrader 5 muss eingeloggt sein; ist es noch nicht bereit, versucht die Beobachtung es jede Minute erneut.
+**Installation wie ein normales Programm** (MetaTrader 5 muss installiert sein):
+
+1. Auf GitHub „Code“ → „Download ZIP“, ZIP entpacken.
+2. `INSTALLIEREN.bat` doppelklicken. Der Installer prüft Python (installiert es bei Bedarf über winget) und
+   MetaTrader 5, fragt nach dem Zielordner (Standard `C:\Trading\TradingBot`, jedes Laufwerk möglich), übernimmt
+   auf Wunsch Kursdaten, Berichte und Beobachtungsstand aus `C:\Trading\MetaTrader-5--master`, richtet die
+   Python-Umgebung ein und legt die Symbole „Trading starten“ / „Trading stoppen“ auf dem Desktop und im Startmenü
+   (Ordner „Trading“) an; optional Autostart mit Windows.
+3. Danach nur noch „Trading starten“: aktualisiert die Kursdaten, startet Beobachtung und Dashboard in eigenen
+   (minimierten) Fenstern und öffnet den Browser. „Trading stoppen“ beendet beides sauber.
+
+Neue Version: neue ZIP entpacken und erneut `INSTALLIEREN.bat` ausführen – Daten bleiben erhalten.
+Entfernen: Startmenü → Trading → „Trading deinstallieren“ (Daten bleiben, außer die Löschung wird bestätigt).
 
 Von Hand:
 
