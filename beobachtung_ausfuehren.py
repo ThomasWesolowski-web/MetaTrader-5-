@@ -14,10 +14,35 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 from tradingbot.config import load_config
+from tradingbot.mt5_client import MT5Error
 from tradingbot.paper import Observer, PaperStore
+from tradingbot.paper.observer import STOP_FILE
+
+RETRY_S = 60
+
+
+def single_instance(lock_path: Path):
+    """Verhindert, dass die Beobachtung zweimal gleichzeitig läuft. Gibt den offenen Sperr-Handle zurück
+    (bleibt bis Programmende offen) oder None, wenn bereits eine Beobachtung läuft. Das Betriebssystem gibt
+    die Sperre auch bei einem Absturz frei."""
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(lock_path, "a+")
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return None
+    return f
 
 
 def show_status(cfg) -> int:
@@ -53,6 +78,11 @@ def main(argv=None, client=None, now_utc_fn=None, sleep=None) -> int:
     if args.intervall is not None and args.intervall < 10:
         ap.error("--intervall muss mindestens 10 Sekunden betragen")
 
+    lock = single_instance(Path(cfg.data_root) / "paper" / "beobachtung.lock")
+    if lock is None:
+        print("Die Beobachtung läuft bereits in einem anderen Fenster – kein zweiter Start.")
+        return 3
+    (Path(cfg.data_root) / "paper" / STOP_FILE).unlink(missing_ok=True)   # alte Stopp-Anforderung verwerfen
     print("Phase 4 – Beobachtung (Paper-Trading): keine Orders, kein Demo- oder Echtgeldhandel")
     print(f"Kandidaten: {', '.join(c.key for c in cfg.paper.candidates)}")
     print(f"Ablage: {Path(cfg.data_root) / 'paper'}")
@@ -60,14 +90,26 @@ def main(argv=None, client=None, now_utc_fn=None, sleep=None) -> int:
         from tradingbot.mt5_client import MT5Client
         client = MT5Client(terminal_path=cfg.terminal_path)
     obs = Observer(cfg, client, now_utc_fn=now_utc_fn)
+    wait = sleep or time.sleep
     try:
-        obs.start()
+        while True:
+            try:
+                obs.start()
+                break
+            except MT5Error as e:   # Terminal noch nicht bereit (z. B. direkt nach dem Windows-Start)
+                if args.einmal:
+                    raise
+                print(f"MT5 noch nicht bereit: {e}\nNeuer Versuch in {RETRY_S} s (Strg+C beendet) ...")
+                wait(RETRY_S)
+                if obs.stop_requested():
+                    return 0
         kw = {"sleep": sleep} if sleep else {}
         obs.run(args.intervall, max_cycles=1 if args.einmal else None, **kw)
     except KeyboardInterrupt:
         print("\nBeendet (Strg+C). Der Stand ist gespeichert; ein Neustart setzt die Beobachtung fort.")
     finally:
         obs.close()
+        lock.close()
     return 0
 
 

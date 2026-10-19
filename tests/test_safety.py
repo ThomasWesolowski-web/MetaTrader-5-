@@ -12,3 +12,13 @@ def test_no_order_functions_in_production_code():
     assert files
     offenders = [str(f) for f in files if PATTERN.search(f.read_text(encoding="utf-8"))]
     assert offenders == []
+
+
+def test_windows_start_files_are_crlf_ascii_and_read_only():
+    bats = sorted(ROOT.glob("*.bat"))
+    assert {b.name for b in bats} >= {"START.bat", "STOP.bat", "Verknuepfungen_erstellen.bat"}
+    for b in bats:
+        data = b.read_bytes()
+        assert data.decode("ascii")                         # cmd.exe zeigt Umlaute sonst falsch an
+        assert b"\n" not in data.replace(b"\r\n", b"")      # nur Windows-Zeilenenden (sonst springt goto falsch)
+        assert b"order_send" not in data.lower() and b"order_check" not in data.lower()

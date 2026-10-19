@@ -68,6 +68,19 @@ geändert, wird die Beobachtung nicht vermischt, sondern ein Fehler protokollier
 | Verbindung | ohne Ticks: Ereignis und neuer Verbindungsaufbau; Fehler eines Kandidaten halten die anderen nicht auf |
 | Speicher | ca. **16 MB** zusätzlich zum Python-Grundbedarf, ca. 65 ms je Durchlauf (gemessen mit 4 Kandidaten und 3.000 Kerzen Vorlauf) |
 
+### Automatischer Start (Ergänzung 19.10.2026)
+
+| Datei | Funktion |
+|---|---|
+| `START.bat` | Doppelklick genügt: richtet beim ersten Start (oder nach einem Umzug auf ein anderes Laufwerk) die Python-Umgebung ein und installiert fehlende Pakete, aktualisiert die Kursdaten, startet Beobachtung und Dashboard in eigenen, minimierten Fenstern (nur wenn sie nicht schon laufen) und öffnet den Browser |
+| `STOP.bat` | beendet die Beobachtung sauber (Stopp-Anforderung, der Stand bleibt gespeichert) und schließt das Dashboard; MT5 bleibt offen |
+| `Verknuepfungen_erstellen.bat` | einmalig: Desktop-Symbole „Trading starten“ und „Trading stoppen“, auf Wunsch Autostart mit Windows |
+
+Für den Betrieb ohne Aufsicht wurde die Beobachtung robuster gemacht (mit Tests): Sie läuft nie doppelt
+(Sperrdatei), wartet beim Start auf MT5 und versucht es jede Minute erneut, bricht bei einem Fehler in einem
+Durchlauf nicht ab und reagiert innerhalb von Sekunden auf `STOP.bat`. Die `.bat`-Dateien konnten nur in der
+Entwicklungsumgebung (Linux) geprüft werden, nicht unter Windows ausgeführt.
+
 ## 3. Kapital und Risiko – Prüfung (Punkt 3, Entscheidung offen)
 
 Beim Start liest `beobachtung_ausfuehren.py` die Spezifikationen von XAUUSD und BTCUSD **live** aus MT5, vergleicht

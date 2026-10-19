@@ -15,6 +15,14 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 
 ## Phase 4: Dashboard und Beobachtung (keine Orders)
 
+**Einfachster Weg:** `START.bat` doppelklicken. Beim ersten Mal wird die Python-Umgebung eingerichtet; danach
+werden Kursdaten aktualisiert, die Beobachtung und das Dashboard in eigenen (minimierten) Fenstern gestartet und
+der Browser geöffnet. `STOP.bat` beendet beides sauber. `Verknuepfungen_erstellen.bat` (einmalig) legt die Symbole
+„Trading starten“/„Trading stoppen“ auf den Desktop und richtet auf Wunsch den Autostart mit Windows ein.
+MetaTrader 5 muss eingeloggt sein; ist es noch nicht bereit, versucht die Beobachtung es jede Minute erneut.
+
+Von Hand:
+
 ```bat
 pip install -r requirements.txt
 python daten_aktualisieren.py

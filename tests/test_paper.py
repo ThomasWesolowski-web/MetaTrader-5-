@@ -306,3 +306,67 @@ def test_missing_conversion_rate_gives_no_euro_values(setup):
     keys = [e["kandidat"] for e in errs]
     with_trades = {k for k, c in doc["kandidaten"].items() if c["trades"]}
     assert set(keys) == with_trades and len(keys) == len(set(keys))   # je betroffenem Kandidaten einmal gemeldet
+
+
+# ---------------------------------------------------------------------- unbeaufsichtigter Betrieb (START/STOP.bat)
+def _cfg_file(cfg):
+    f = cfg.data_root.parent / "config.toml"
+    f.write_text('[data]\nroot = "data"\n[paper]\nwarmup_bars = 600\n', encoding="utf-8")
+    return f
+
+
+def test_second_instance_is_refused(setup, capsys):
+    fake, cfg = setup
+    lock = beobachtung_ausfuehren.single_instance(cfg.data_root / "paper" / "beobachtung.lock")
+    assert lock is not None
+    rc = beobachtung_ausfuehren.main(["--config", str(_cfg_file(cfg)), "--einmal"],
+                                     client=MT5Client(fake, retry_sleep=0), now_utc_fn=lambda: fake.now_utc)
+    assert rc == 3 and "läuft bereits" in capsys.readouterr().out
+    lock.close()
+    assert beobachtung_ausfuehren.single_instance(cfg.data_root / "paper" / "beobachtung.lock") is not None
+
+
+def test_stop_request_ends_loop_cleanly(setup):
+    fake, cfg = setup
+    obs = make_observer(fake, cfg)
+    sleeps = []
+
+    def fake_sleep(s):
+        sleeps.append(s)
+        fake.now_utc += pd.Timedelta(seconds=s)
+        if len(sleeps) == 150:                       # nach gut zwei Durchläufen: STOP.bat
+            (cfg.data_root / "paper" / "stop.anfrage").write_text("")
+    obs.run(60, sleep=fake_sleep)
+    assert obs.cycles == 3 and not (cfg.data_root / "paper" / "stop.anfrage").exists()
+
+
+def test_cycle_error_does_not_end_observation(setup, monkeypatch):
+    fake, cfg = setup
+    obs = make_observer(fake, cfg)
+    real, calls = obs.cycle, []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 2:
+            raise ConnectionError("Terminal kurz weg")
+        return real()
+    monkeypatch.setattr(obs, "cycle", flaky)
+    obs.run(60, max_cycles=4, sleep=lambda s: None)
+    assert len(calls) == 4
+    assert any(e.get("bereich") == "durchlauf" for e in PaperStore(cfg.data_root).events())
+
+
+def test_waits_for_mt5_when_terminal_not_ready(setup, capsys):
+    fake, cfg = setup
+    real_init, tries = fake.initialize, []
+
+    def init(**kw):
+        tries.append(1)
+        return len(tries) >= 3 and real_init(**kw)       # erst beim dritten Versuch bereit
+    fake.initialize = init
+    rc = beobachtung_ausfuehren.main(["--config", str(_cfg_file(cfg)), "--intervall", "60"],
+                                     client=MT5Client(fake, retry_sleep=0), now_utc_fn=lambda: fake.now_utc,
+                                     sleep=lambda s: (cfg.data_root / "paper" / "stop.anfrage").write_text("")
+                                     if len(tries) >= 3 else None)
+    out = capsys.readouterr().out
+    assert rc == 0 and len(tries) == 3 and out.count("MT5 noch nicht bereit") == 2

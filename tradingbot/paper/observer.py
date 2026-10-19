@@ -53,6 +53,7 @@ CHUNK_BARS = 40_000
 CHECK_SYMBOLS = ("XAUUSD", "BTCUSD")
 CHECK_TFS = ("M1", "M5", "M15", "M30", "H1")
 CLOCK_TOLERANCE_S = 120
+STOP_FILE = "stop.anfrage"
 
 
 def _f(x, nd=2):
@@ -282,20 +283,42 @@ class Observer:
         self.store.write_status(status)
         return status
 
+    def stop_requested(self) -> bool:
+        """STOP.bat legt data/paper/stop.anfrage an -> Beobachtung endet sauber nach dem laufenden Durchlauf."""
+        f = self.store.dir / STOP_FILE
+        if f.exists():
+            f.unlink(missing_ok=True)
+            return True
+        return False
+
     def run(self, interval_s: int | None = None, max_cycles: int | None = None, sleep=time.sleep) -> None:
         interval_s = interval_s or self.pc.interval_s
         n = 0
         while True:
+            if self.stop_requested():
+                self.log("Stopp angefordert – Beobachtung wird beendet.")
+                return
             t0 = time.time()
-            st = self.cycle()
+            try:
+                st = self.cycle()
+                parts = [f"{k.split('_', 1)[1]}: {v['offen']} offen/{v['geschlossen']} geschl."
+                         for k, v in st["kandidaten"].items()]
+                self.log(f"{st['updated_utc'][:19]} UTC  Durchlauf {st['durchlauf']}  "
+                         + "  ".join(f"{s} {m['zustand']}" for s, m in st["maerkte"].items()) + "  |  " + "; ".join(parts))
+            except Exception as e:  # unbeaufsichtigter Betrieb: ein Fehler beendet die Beobachtung nicht
+                self.log(f"FEHLER im Durchlauf: {type(e).__name__}: {e} – nächster Versuch beim nächsten Durchlauf")
+                try:
+                    self.store.event("fehler", self.now_utc_fn(), bereich="durchlauf", meldung=f"{type(e).__name__}: {e}")
+                except Exception:
+                    pass
             n += 1
-            parts = [f"{k.split('_', 1)[1]}: {v['offen']} offen/{v['geschlossen']} geschl."
-                     for k, v in st["kandidaten"].items()]
-            self.log(f"{st['updated_utc'][:19]} UTC  Durchlauf {st['durchlauf']}  "
-                     + "  ".join(f"{s} {m['zustand']}" for s, m in st["maerkte"].items()) + "  |  " + "; ".join(parts))
             if max_cycles and n >= max_cycles:
                 return
-            sleep(max(1.0, interval_s - (time.time() - t0)))
+            # in Sekundenschritten warten, damit eine Stopp-Anforderung schnell wirkt
+            for _ in range(int(max(1.0, interval_s - (time.time() - t0)))):
+                if (self.store.dir / STOP_FILE).exists():
+                    break
+                sleep(1)
 
     # ------------------------------------------------------------------ Kandidat
     def _process(self, cand: PaperCandidate, now, now_srv, tick_srv, fresh, tick, eur) -> None:
