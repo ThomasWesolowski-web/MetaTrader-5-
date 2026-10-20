@@ -484,3 +484,51 @@ class OpeningRangeBreakout(TradeStrategy):
         d = np.where(up[idx], 1, -1)
         st = np.where(d == 1, rl[idx], rh[idx])
         return Signals.build(idx, d, st, _rr_target(c, idx, d, st, p["rr"]), c, exit_long=flat, exit_short=flat)
+
+
+@register
+class SmaBoxTrend(TradeStrategy):
+    name = "sma_box_trend"
+    description = "Trendfolge: SMA 20/50-Kreuzung mit Trendfilter SMA 200 und SMA 1500, Einstieg beim Box-Ausbruch"
+    rules = ("Signal: SMA 20 kreuzt SMA 50 (aufwärts = Long). Box = Hoch/Tief der letzten box_bars Kerzen bis "
+             "einschließlich der Kreuzungskerze (M15: 3 Stunden). Einstieg: innerhalb von wait_bars Kerzen danach "
+             "(M15: 2 Stunden) erster Schluss über dem Box-Hoch, solange SMA 20 noch über SMA 50 liegt und der "
+             "Schluss über SMA 200 und SMA 1500 liegt (sonst entfällt das Signal); Ausführung zur Eröffnung der "
+             "Folgekerze. Stop: Box-Tief. "
+             "Kein Kursziel; Ausstieg bei der Gegenkreuzung SMA 20/50. Short spiegelbildlich.")
+    default_params = {"fast": 20, "slow": 50, "trend": 200, "trend_long": 1500, "box_bars": 12, "wait_bars": 8}
+    param_grid = [{}]      # feste Regeln aus der Vorlage – keine Parameterauswahl
+    timeframes = ("M15",)
+
+    def entries(self, bars):
+        p = self.params
+        o, h, l, c, a = _arrays(bars)
+        fe = features.get(bars)
+        f, s_, t1, t2 = fe.sma(p["fast"]), fe.sma(p["slow"]), fe.sma(p["trend"]), fe.sma(p["trend_long"])
+        n = len(c)
+        with np.errstate(invalid="ignore"):
+            above = f > s_
+            below = f < s_
+        valid = np.isfinite(f) & np.isfinite(s_)
+        prev_valid = np.concatenate([[False], valid[:-1]])
+        cross_up = above & ~np.concatenate([[False], above[:-1]]) & valid & prev_valid
+        cross_dn = below & ~np.concatenate([[False], below[:-1]]) & valid & prev_valid
+        box_hi = pd.Series(h).rolling(p["box_bars"], min_periods=p["box_bars"]).max().to_numpy()
+        box_lo = pd.Series(l).rolling(p["box_bars"], min_periods=p["box_bars"]).min().to_numpy()
+        out_i, out_d, out_s = [], [], []
+        for d, crosses, side in ((1, np.nonzero(cross_up)[0], above), (-1, np.nonzero(cross_dn)[0], below)):
+            for k in crosses:
+                hi, lo = box_hi[k], box_lo[k]
+                if not (np.isfinite(hi) and np.isfinite(lo)):
+                    continue
+                for j in range(k + 1, min(n, k + 1 + p["wait_bars"])):
+                    if not side[j]:
+                        break                                  # Kreuzung zurückgenommen -> Signal verfällt
+                    if (c[j] > hi if d == 1 else c[j] < lo):
+                        if d * (c[j] - t1[j]) > 0 and d * (c[j] - t2[j]) > 0:
+                            out_i.append(j)
+                            out_d.append(d)
+                            out_s.append(lo if d == 1 else hi)
+                        break                                  # nur der erste Ausbruch je Kreuzung
+        idx, d, st = np.array(out_i, int), np.array(out_d, int), np.array(out_s, float)
+        return Signals.build(idx, d, st, np.full(len(idx), np.nan), c, exit_long=cross_dn, exit_short=cross_up)

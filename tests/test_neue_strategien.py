@@ -119,7 +119,8 @@ def test_timeframes_per_strategy():
     assert "opening_range_breakout" in strategies_for("M1", names)
     assert "opening_range_breakout" not in strategies_for("M30", names)
     assert strategies_for("H4", names) == ["ema_vwap"]                   # Phase-3-Strategien bleiben bei M1–H1
-    old = [n for n in names if n not in ("ema_vwap", "opening_range_breakout")]
+    assert "sma_box_trend" in strategies_for("M15", names) and "sma_box_trend" not in strategies_for("H1", names)
+    old = [n for n in names if n not in ("ema_vwap", "opening_range_breakout", "sma_box_trend")]
     assert len(old) == 12 and all(len(strategies_for(tf, old)) == 12 for tf in ("M1", "M5", "M15", "M30", "H1"))
 
 
@@ -147,3 +148,40 @@ def test_risk_rules_approved_20_10_2026():
     assert (r.initial, r.risk_per_trade, r.max_daily_loss, r.max_drawdown, r.max_positions) == \
         (1000.0, 0.01, 0.03, 0.20, 2)
     assert CRITERIA["validation_max_dd_pct"] == 20.0 and CRITERIA["test_max_dd_pct"] == 20.0
+
+
+# ------------------------------------------------------------------ SMA 20/50 mit Box-Ausbruch (21.10.2026)
+def test_sma_matches_pandas_and_is_start_independent():
+    x = np.random.default_rng(1).normal(100, 5, 3000)
+    assert np.allclose(ind.sma(x, 50), pd.Series(x).rolling(50).mean().to_numpy(), equal_nan=True)
+    assert np.array_equal(ind.sma(x, 50)[1000:], ind.sma(x[700:], 50)[300:])   # bitgenau unabhängig vom Start
+
+
+def test_sma_box_trend_rules():
+    s = create("sma_box_trend")
+    assert s.timeframes == ("M15",) and base._REGISTRY["sma_box_trend"].param_grid == [{}]
+    rng = np.random.default_rng(21)
+    n = 20_000
+    t = pd.date_range("2024-01-01", periods=n, freq="15min", tz="UTC")
+    c = 100 * np.exp(np.cumsum(rng.normal(0.00003, 0.003, n)))
+    o = np.concatenate([[c[0]], c[:-1]])
+    h, l = np.maximum(o, c) + 0.05, np.minimum(o, c) - 0.05
+    sig = s.entries(frame(t, o, h, l, c))
+    assert len(sig) > 20 and set(sig.direction) == {1, -1}
+    sm = {k: pd.Series(c).rolling(k).mean().to_numpy() for k in (20, 50, 200, 1500)}
+    up = sm[20] > sm[50]
+    for j, d, st in zip(sig.idx, sig.direction, sig.stop):
+        side = up if d == 1 else sm[20] < sm[50]
+        # Kreuzung k innerhalb der 8 Kerzen davor, seitdem nicht zurückgenommen
+        ks = [k for k in range(j - 8, j) if side[k] and not side[k - 1]]
+        assert ks, j
+        k = ks[-1]
+        assert side[k:j + 1].all()
+        hi, lo = h[k - 11:k + 1].max(), l[k - 11:k + 1].min()
+        assert (c[j] > hi) if d == 1 else (c[j] < lo)
+        assert not any((c[m] > hi) if d == 1 else (c[m] < lo) for m in range(k + 1, j))   # erster Ausbruch
+        assert d * (c[j] - sm[200][j]) > 0 and d * (c[j] - sm[1500][j]) > 0
+        assert st == (lo if d == 1 else hi)
+    assert np.isnan(sig.target).all()
+    assert np.array_equal(np.nonzero(sig.exit_long)[0],
+                          [i for i in range(51, n) if sm[20][i] < sm[50][i] and not sm[20][i - 1] < sm[50][i - 1]])

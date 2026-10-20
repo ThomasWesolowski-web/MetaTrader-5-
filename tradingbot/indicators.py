@@ -18,6 +18,16 @@ def ema(x: np.ndarray, period: int) -> np.ndarray:
     return pd.Series(x).ewm(span=period, adjust=False, min_periods=period).mean().to_numpy()
 
 
+def sma(x: np.ndarray, period: int) -> np.ndarray:
+    """Einfacher gleitender Durchschnitt. Jedes Fenster wird einzeln summiert (kein laufendes Aufsummieren), damit
+    das Ergebnis nicht vom Startpunkt der Daten abhängt – wichtig für die blockweise Berechnung."""
+    x = np.asarray(x, dtype=float)
+    out = np.full(len(x), np.nan)
+    if len(x) >= period:
+        out[period - 1:] = np.lib.stride_tricks.sliding_window_view(x, period).mean(axis=1)
+    return out
+
+
 def atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14) -> np.ndarray:
     """Average True Range nach Wilder."""
     prev = np.concatenate([[np.nan], close[:-1]])

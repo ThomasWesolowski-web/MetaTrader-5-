@@ -64,11 +64,34 @@ Kosten.
 erhöht die Gefahr, dass ein Satz nur zufällig gut aussieht (Überoptimierung). Die Prüfung auf Validierungs- und
 Testdaten, die bei der Auswahl nicht verwendet werden, bleibt dieselbe.
 
+### `sma_box_trend` – SMA 20/50 mit Trendfilter und Box-Ausbruch (Ergänzung 21.10.2026)
+
+Vorlage: eine vom Nutzer eingefügte Zusammenfassung eines fremden Tests („angepasste SMA-Strategie“). Die dort
+genannten Ergebnisse (z. B. BTC 2017–2024 +177 R, Gold, Devisen, Indizes) sind **nicht überprüft und werden nicht
+übernommen**; geprüft wird nur mit den eigenen Vantage-Daten und Kosten.
+
+| | |
+|---|---|
+| Signal | SMA 20 kreuzt SMA 50 (aufwärts = Long, abwärts = Short) |
+| Box | Hoch/Tief der letzten 12 Kerzen bis einschließlich der Kreuzungskerze (3 Stunden auf M15) |
+| Einstieg | innerhalb der 8 Kerzen nach der Kreuzung (2 Stunden) der erste Schluss über dem Box-Hoch (Short: unter dem Box-Tief); Ausführung zur Eröffnung der Folgekerze. Wird die Kreuzung vorher zurückgenommen, verfällt das Signal |
+| Trendfilter | beim Ausbruch Schluss über SMA 200 **und** über SMA 1500 (Short: darunter); sonst entfällt das Signal |
+| Stop | anderes Ende der Box |
+| Ausstieg | kein Kursziel; Gegenkreuzung SMA 20/50 (Ausführung zur nächsten Eröffnung) oder Stop |
+| Parameter | fest wie in der Vorlage, **keine Parameterauswahl** (ein Satz) |
+| Zeitrahmen | nur M15 |
+
+Auslegungen, die die Vorlage offen lässt: „Durchschnitt“ = einfacher gleitender Durchschnitt (SMA) auch für 200
+und 1500; die Box schließt die Kreuzungskerze ein; die Trendfilter werden auf der Ausbruchskerze geprüft; Ausbruch =
+Schlusskurs (nicht Docht) jenseits der Box. Stop und Ausstieg wie im übrigen Backtest (Stop vor Ziel, Kosten
+konservativ).
+
 ## 3. Änderungen im Backtest-Ablauf
 
 - Jede Strategie läuft nur auf ihren eigenen Zeitrahmen. Die zwölf Phase-3-Strategien bleiben bei M1–H1.
 - Standard-Zeitrahmen von `backtest_ausfuehren.py` jetzt M1, M5, M15, M30, H1 **und H4**. Auf H4 läuft nur `ema_vwap`.
-- Testeinheiten bei vollem Lauf: 12 × 5 × 2 = 120 (wie bisher) + `ema_vwap` 4 × 2 = 8 + ORB 3 × 2 = 6 → **134**.
+- Testeinheiten bei vollem Lauf: 12 × 5 × 2 = 120 (wie bisher) + `ema_vwap` 4 × 2 = 8 + ORB 3 × 2 = 6 +
+  `sma_box_trend` 1 × 2 = 2 → **136**.
 - Der Backtest lädt zusätzlich die Spalte `tick_volume` (für den VWAP).
 - Blockweise Berechnung: Für den Wochen-VWAP wird der Vorlauf auf mindestens 10 Tage verlängert, damit die Woche am
   Blockanfang vollständig ist (sonst wäre der VWAP auf M1 an Blockgrenzen falsch). Ein Test prüft das.
@@ -80,11 +103,11 @@ Testdaten, die bei der Auswahl nicht verwendet werden, bleibt dieselbe.
 
 ## 4. Tests
 
-**204 Tests bestanden** (vorher 188).
+**209 Tests bestanden** (vorher 188).
 
 | Neu/geändert | Prüft |
 |---|---|
-| `test_neue_strategien.py` (10, neu) | Wochen-VWAP von Hand nachgerechnet (Neustart So 17:00 NY, erste Woche leer, Kerze ohne Volumen); EMA/VWAP-Regeln Kerze für Kerze; ORB New York (Range, Einstieg, Stop, Ziel, Schließen 16:00 NY), London mit Sommerzeit, nur ein Trade je Tag, unvollständige Range und zu grober Zeitrahmen → kein Trade; Zeitrahmen je Strategie; Blockberechnung mit sehr kurzem Vorlauf = Gesamtberechnung; freigegebene Risikowerte |
+| `test_neue_strategien.py` (12, neu) | SMA-Strategie: Regeln je Signal unabhängig nachgerechnet (Kreuzung, Box, erster Ausbruch, beide Trendfilter, Stop, Ausstieg); SMA bitgenau unabhängig vom Datenbeginn (Blockberechnung). Außerdem: | Wochen-VWAP von Hand nachgerechnet (Neustart So 17:00 NY, erste Woche leer, Kerze ohne Volumen); EMA/VWAP-Regeln Kerze für Kerze; ORB New York (Range, Einstieg, Stop, Ziel, Schließen 16:00 NY), London mit Sommerzeit, nur ein Trade je Tag, unvollständige Range und zu grober Zeitrahmen → kein Trade; Zeitrahmen je Strategie; Blockberechnung mit sehr kurzem Vorlauf = Gesamtberechnung; freigegebene Risikowerte |
 | bestehende Prüfungen | Kein Blick in die Zukunft und Block = Gesamtberechnung laufen automatisch auch für beide neuen Strategien |
 | `test_account.py` | Rechenbeispiele nutzen die alten Werte jetzt als ausdrückliche Testparameter (geprüft wird die Rechnung, nicht die Grenze) |
 | `test_backtest_e2e.py` | Kostenvergleich nur bei identischen Trades (gleiche Anzahl **und** gleiche Sperrtage). Bei 1 % Risiko kann die Tagesverlustgrenze je Kostenszenario an anderen Tagen greifen |

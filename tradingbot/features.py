@@ -76,6 +76,9 @@ class Features:
     def ema(self, n: int):
         return self._get(("ema", n), lambda: ind.ema(self.c, n))
 
+    def sma(self, n: int):
+        return self._get(("sma", n), lambda: ind.sma(self.c, n))
+
     def ema_atr(self, n: int, atr_n: int = 14):
         return self._get(("ema_atr", n, atr_n), lambda: ind.ema(self.atr(atr_n), n))
 
