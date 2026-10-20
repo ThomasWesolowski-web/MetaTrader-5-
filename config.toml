@@ -35,7 +35,8 @@ recurring_min_weeks = 3
 
 [paper]
 # Phase 4 – Beobachtung (Paper-Trading): keine Orders, nur Protokoll. Risiko und Kapital sind NICHT hier
-# einstellbar (fest: 1 000 € Referenzkapital, 0,25 % je Trade, 1 % Tagesverlust, max. 2 Positionen).
+# einstellbar (fest im Programm, Freigabe 20.10.2026: 1 000 € Referenzkapital, 1 % je Trade, 3 % Tagesverlust,
+# 20 % Drawdown-Grenze, max. 2 Positionen).
 interval_s = 60          # Sekunden zwischen zwei Durchläufen
 warmup_bars = 3000       # Kerzen vor Beobachtungsbeginn für die Indikatoren
 stale_after_s = 300      # älterer Tick = keine aktuellen Kurse

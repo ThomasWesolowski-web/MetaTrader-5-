@@ -31,8 +31,13 @@ def raw(trades):
     return pd.DataFrame(rows)
 
 
+# Die Rechenbeispiele unten nutzen die Phase-3-Regeln (0,25 % / 1 % / 5 %) als feste Testparameter – geprüft wird
+# die Mechanik, nicht die freigegebenen Standardwerte (diese prüft test_neue_strategien.py).
+P3 = dict(risk_per_trade=0.0025, max_daily_loss=0.01, max_drawdown=0.05)
+
+
 def acct(r, spec=GOLD, costs=NOCOST, rules=None, always_open=False):
-    return run_account(r, spec, conv(), "EUR", 500, costs, rules or RiskRules(), always_open)
+    return run_account(r, spec, conv(), "EUR", 500, costs, rules or RiskRules(**P3), always_open)
 
 
 def test_position_size_and_pnl_in_eur():
@@ -65,7 +70,7 @@ def test_drawdown_breach_is_flagged():
     losses = [("2026-03-%02d 10:00" % d, "2026-03-%02d 11:00" % d, 1, 4000.0, 3998.75, 3998.75) for d in range(2, 32)]  # 30 Verluste à 2 € = 6 %
     res = acct(raw(losses))
     assert res.max_dd_pct > 0.05 and res.dd_breach_time is not None
-    res2 = acct(raw(losses), rules=RiskRules(halt_on_max_dd=True))
+    res2 = acct(raw(losses), rules=RiskRules(**P3, halt_on_max_dd=True))
     assert res2.skipped["max_dd_halt"] > 0
 
 

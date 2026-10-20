@@ -18,7 +18,8 @@ def bars():
     o = np.concatenate([[c[0]], c[:-1]])
     w = np.abs(rng.normal(0, 0.0006, n)) * c   # Dochte realistisch: ATR ≈ 1,3–1,5 × Schlusskurs-Schwankung
     return pd.DataFrame({"time": t, "time_server": t.as_unit("ns").asi8 // 10**9, "open": o, "close": c,
-                         "high": np.maximum(o, c) + w, "low": np.minimum(o, c) - w, "spread": 20})
+                         "high": np.maximum(o, c) + w, "low": np.minimum(o, c) - w, "spread": 20,
+                         "tick_volume": rng.integers(1, 200, n)})
 
 
 @pytest.mark.parametrize("name", trade_strategies())

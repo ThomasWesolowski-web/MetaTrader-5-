@@ -43,7 +43,10 @@ def test_conservative_costs_never_better_than_basis(project):
             for per in ("validation", "test"):
                 b = r["evaluation"]["basis"][per]
                 k = r["evaluation"]["konservativ"][per]
-                if b["trades"] and k["trades"] and b["trades"] == k["trades"]:
+                # Nur vergleichbar, wenn dieselben Trades ausgeführt wurden: gleiche Anzahl UND gleiche Sperrtage
+                # (bei 1 % Risiko kann die Tagesverlustgrenze je Szenario an anderen Tagen greifen)
+                if (b["trades"] and k["trades"] and b["trades"] == k["trades"]
+                        and b["daily_loss_lock_days"] == k["daily_loss_lock_days"]):
                     assert k["net_profit_eur"] <= b["net_profit_eur"] + 1e-9
 
 

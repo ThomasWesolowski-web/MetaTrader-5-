@@ -131,6 +131,16 @@ class Features:
             return up, dn
         return self._get(("breakouts", n), calc)
 
+    def weekly_vwap(self):
+        """Wochen-VWAP mit Tick-Volumen (MT5 liefert für Gold/Bitcoin kein echtes Handelsvolumen)."""
+        return self._get(("weekly_vwap",), lambda: ind.weekly_vwap(pd.DatetimeIndex(self.bars["time"]), self.h, self.l,
+                                                                   self.c, self.col("tick_volume")))
+
+    def opening_range(self, tz: str, open_min: int, range_min: int):
+        return self._get(("orb", tz, open_min, range_min),
+                         lambda: ind.opening_range(pd.DatetimeIndex(self.bars["time"]), self.h, self.l, tz, open_min,
+                                                   range_min))
+
     def momentum(self, n: int, atr_n: int = 14):
         def calc():
             c, a = self.c, self.atr(atr_n)

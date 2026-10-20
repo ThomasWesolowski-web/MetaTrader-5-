@@ -241,11 +241,11 @@ def test_contract_check_documents_stop_limits(setup):
     btc = doc["symbols"]["BTCUSD"]
     eurusd = fake._eurusd()
     price = btc["price"]
-    # 2,50 € je 0,01 Lot: (2,50/0,01 − Kommission je Lot) / (Kontraktgröße × USD→EUR)
+    # 10 € (1 % von 1 000 €) je 0,01 Lot: (10/0,01 − Kommission je Lot) / (Kontraktgröße × USD→EUR)
     comm_lot = 0.0004 * price / eurusd
-    expected = (2.5 / 0.01 - comm_lot) / (1.0 / eurusd)
+    expected = (10.0 / 0.01 - comm_lot) / (1.0 / eurusd)
     assert btc["max_stop_distance"] == pytest.approx(expected, rel=1e-4)
-    assert btc["risk_eur"] == 2.5 and btc["reference_capital_eur"] == 1000.0
+    assert btc["risk_eur"] == 10.0 and btc["reference_capital_eur"] == 1000.0
     assert set(btc["by_timeframe"]) == {"M1", "M5", "M15", "M30", "H1"}
     assert btc["spec_differences"] == []
     assert "XAUUSD" in doc["symbols"]
@@ -267,7 +267,7 @@ def test_cli_once_and_status_never_send_orders(setup, capsys):
 
 def test_reference_account_mapping_when_trades_are_executable(setup):
     """Nur im Test: höheres Risiko, damit Trades ausführbar sind und die Zuordnung geprüft wird.
-    (Im Programm ist die Risikoregel fest 0,25 % – siehe test_risk_rules_are_fixed.)"""
+    (Im Programm ist die Risikoregel fest 1 % – siehe test_risk_rules_are_fixed.)"""
     from tradingbot.backtest.account import RiskRules
     fake, cfg = setup
     obs = make_observer(fake, cfg)
@@ -287,11 +287,14 @@ def test_risk_rules_are_fixed():
     from tradingbot.config import load_config
     import tempfile, pathlib
     d = pathlib.Path(tempfile.mkdtemp())
-    (d / "config.toml").write_text("[paper]\nrisk_per_trade = 0.01\n", encoding="utf-8")
+    (d / "config.toml").write_text("[paper]\nrisk_per_trade = 0.02\n", encoding="utf-8")
     with pytest.raises(ValueError):                      # Risiko ist über die Konfiguration nicht änderbar
         load_config(d / "config.toml")
     obs = Observer(Config(), client=None)
-    assert obs.rules == RiskRules() and obs.rules.risk_per_trade == 0.0025 and obs.rules.initial == 1000.0
+    assert obs.rules == RiskRules() and obs.rules.initial == 1000.0
+    # Freigabe des Nutzers vom 20.10.2026 – Änderungen nur mit ausdrücklicher Zustimmung
+    assert (obs.rules.risk_per_trade, obs.rules.max_daily_loss, obs.rules.max_drawdown, obs.rules.max_positions) == \
+        (0.01, 0.03, 0.20, 2)
 
 
 def test_missing_conversion_rate_gives_no_euro_values(setup):

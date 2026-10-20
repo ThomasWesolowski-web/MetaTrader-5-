@@ -15,7 +15,7 @@ Ablauf je Durchlauf und Kandidat:
   4. Ein- und Ausstiege mit derselben Engine wie im Backtest (engine.simulate): Einstieg zur Eröffnung der
      Folgekerze (Long zum Ask = Bid + Spread, plus Slippage), Stop vor Ziel, kein Einstieg über Datenlücken,
      Lücken-Ausführung zum Eröffnungskurs. Abgeschlossene Trades werden eingefroren.
-  5. Kosten und Ergebnis je Mindestlot (0,01) in € sowie Referenzkonto 1 000 € mit den unveränderten Risikoregeln
+  5. Kosten und Ergebnis je Mindestlot (0,01) in € sowie Referenzkonto 1 000 € mit den Risikoregeln aus RiskRules
      (gleiche Kontosimulation wie Phase 3).
 
 Es werden keine Kurse erfunden: Fehlen Kerzen oder Ticks, wird das protokolliert und nichts ausgeführt.
@@ -47,7 +47,7 @@ from ..strategies import Signals, create
 from ..timeframes import seconds
 from .store import PaperStore
 
-BAR_COLS = ["time", "time_server", "open", "high", "low", "close", "spread"]
+BAR_COLS = ["time", "time_server", "open", "high", "low", "close", "tick_volume", "spread"]
 CONVERSION_TF = "M5"
 CHUNK_BARS = 40_000
 CHECK_SYMBOLS = ("XAUUSD", "BTCUSD")
@@ -67,7 +67,7 @@ class Observer:
         self.now_utc_fn = now_utc_fn or (lambda: pd.Timestamp.now(tz="UTC"))
         self.store = PaperStore(cfg.data_root)
         self.market = MarketStore(cfg.data_root)
-        self.rules = RiskRules()          # unverändert aus Phase 3 – bewusst nicht konfigurierbar
+        self.rules = RiskRules()          # wie im Backtest – bewusst nicht über config.toml einstellbar
         self.snap: dict[str, dict] = {}
         self.cycles = 0
 
@@ -514,7 +514,7 @@ class Observer:
                     v["referenzkonto"] = {"ausgefuehrt": True, "volumen": ex[0], "netto_eur": ex[1]}
                 else:
                     v["referenzkonto"] = {"ausgefuehrt": False,
-                                          "grund": "Mindestlot: 0,01 Lot überschreitet das Risiko von 0,25 %"
+                                          "grund": f"Mindestlot: 0,01 Lot überschreitet das Risiko von {100 * self.rules.risk_per_trade:g} %".replace(".", ",")
                                           if not v["innerhalb_risikogrenze"] else
                                           "Risikoregel (Tagesverlust, Positionen oder Margin)"}
             trades.append(v)

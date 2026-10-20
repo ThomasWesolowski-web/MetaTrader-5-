@@ -43,17 +43,23 @@ from .walkforward import objective, slice_trades, split_periods, wf_windows
 SELECTION_SCENARIO = "konservativ"
 RISK_VARIANTS = (0.0025, 0.005, 0.01)
 
-# Qualitätsanforderungen für "geeignet für den Demohandel" (konservatives Kostenszenario, 0,25 % Risiko)
+# Qualitätsanforderungen für "geeignet für den Demohandel" (konservatives Kostenszenario, Risiko laut RiskRules:
+# seit 20.10.2026 1 % je Trade und 20 % Drawdown-Grenze, vorher 0,25 % / 5 % – Freigabe des Nutzers)
 CRITERIA = {
-    "validation_min_trades": 50, "validation_min_pf": 1.2, "validation_max_dd_pct": 5.0,
+    "validation_min_trades": 50, "validation_min_pf": 1.2, "validation_max_dd_pct": 20.0,
     "wf_min_trades": 50, "wf_min_positive_folds_pct": 55.0,
-    "test_min_trades": 30, "test_min_pf": 1.1, "test_max_dd_pct": 5.0,
+    "test_min_trades": 30, "test_min_pf": 1.1, "test_max_dd_pct": 20.0,
     "max_min_lot_skip_pct": 50.0,
 }
 
 
 def trade_strategies() -> list[str]:
     return [n for n in available() if issubclass(strategy_base._REGISTRY[n], TradeStrategy)]
+
+
+def strategies_for(tf: str, names) -> list[str]:
+    """Strategien, die auf diesem Zeitrahmen geprüft werden (TradeStrategy.timeframes)."""
+    return [n for n in names if tf in strategy_base._REGISTRY[n].timeframes]
 
 
 def _load_context(store: MarketStore, symbol: str, conv_tfs, start=None) -> dict:
@@ -88,7 +94,7 @@ def _feasibility(bars, spec, conv, account_ccy, rules: RiskRules, test_start) ->
 
 
 # ---------------------------------------------------------------------- Speicher- und Blockverarbeitung
-JOB_COLUMNS = ["open", "high", "low", "close", "spread"]   # mehr braucht der Backtest nicht
+JOB_COLUMNS = ["open", "high", "low", "close", "tick_volume", "spread"]   # tick_volume für den Wochen-VWAP
 DEFAULT_BLOCK = 100_000      # Kerzen je Block für die Signalberechnung
 MIN_BLOCK = 10_000           # kleinste Blockgröße bei automatischer Verkleinerung
 WARMUP = 10_000              # Vorlauf je Block: Indikatoren schwingen ein (EMA 200: Restfehler < 1e-40)
@@ -106,11 +112,15 @@ def _signals_blocked(name: str, grid: list[dict], bars: pd.DataFrame, block: int
     if not block or n <= block:
         with features.shared(bars):
             return [create(name, **p).entries(bars) for p in grid]
+    span = strategy_base._REGISTRY[name].warmup_seconds
+    t_ns = pd.DatetimeIndex(bars["time"]).as_unit("ns").asi8 if span else None
     acc = [{"idx": [], "d": [], "s": [], "t": []} for _ in grid]
     exl, exs, mb = [None] * len(grid), [None] * len(grid), [0] * len(grid)
     for start in range(0, n, block):
         end = min(n, start + block)
         w0 = max(0, start - warmup)
+        if span:                              # zeitlicher Vorlauf (z. B. ganze Woche für den Wochen-VWAP)
+            w0 = min(w0, int(np.searchsorted(t_ns, t_ns[start] - span * 10**9)))
         off = start - w0
         sub = bars.iloc[w0:end].reset_index(drop=True)
         with features.shared(sub):
@@ -236,7 +246,7 @@ def run_job(cfg: Config, symbol: str, tf: str, strategy_names: list[str] | None 
             block_bars: int | None = DEFAULT_BLOCK, checkpoints: Checkpoints | None = None,
             progress: Progress | None = None, state: dict | None = None) -> dict:
     t0 = time.time()
-    names = strategy_names or trade_strategies()
+    names = strategies_for(tf, strategy_names or trade_strategies())
     store = MarketStore(cfg.data_root)
     state = state if state is not None else {"block": block_bars}
     fp_job = job_fingerprint(cfg, store, symbol, tf)
@@ -434,7 +444,8 @@ def assess(r: dict) -> tuple[bool, list[str], float]:
     score = (0.35 * clip((v["t_stat"] or 0) / 3, -1, 1)
              + 0.25 * clip(((r["walk_forward"]["positive_folds_pct"] or 0) - 50) / 50, -1, 1)
              + 0.25 * clip(((t["profit_factor"] or 0) - 1) / 1, -1, 1)
-             - 0.15 * clip(((max(v["max_drawdown_pct"] or 0, t["max_drawdown_pct"] or 0)) - 5) / 10, 0, 1))
+             - 0.15 * clip(((max(v["max_drawdown_pct"] or 0, t["max_drawdown_pct"] or 0)) - c["test_max_dd_pct"])
+                           / (2 * c["test_max_dd_pct"]), 0, 1))
     return len(reasons) == 0, reasons, round(score, 4)
 
 
@@ -511,10 +522,12 @@ def run_all(cfg: Config, symbols, timeframes, strategy_names=None, workers: int 
     names = strategy_names or trade_strategies()
     workers = safe_workers(workers, log)
     ckpt = Checkpoints(checkpoint_dir) if checkpoint_dir else None
-    jobs = [(s, tf) for s in symbols for tf in timeframes]
-    progress = Progress(len(jobs) * len(names))
-    log(f"{len(jobs) * len(names)} Testeinheiten ({len(symbols)} Märkte × {len(timeframes)} Zeitrahmen × "
-        f"{len(names)} Strategien), Blockgröße {block_bars or 'aus'}, {workers} Prozess(e) | {resources.status()}")
+    jobs = [(s, tf) for s in symbols for tf in timeframes if strategies_for(tf, names)]
+    expected = {(s, tf, n) for s, tf in jobs for n in strategies_for(tf, names)}
+    progress = Progress(len(expected))
+    log(f"{len(expected)} Testeinheiten ({len(symbols)} Märkte × {len(timeframes)} Zeitrahmen × "
+        f"{len(names)} Strategien, jede nur auf ihren Zeitrahmen), Blockgröße {block_bars or 'aus'}, "
+        f"{workers} Prozess(e) | {resources.status()}")
     out = []
     state = {"block": block_bars}
     if workers <= 1:
@@ -538,7 +551,6 @@ def run_all(cfg: Config, symbols, timeframes, strategy_names=None, workers: int 
                 out.append(res)
     order = {tf: i for i, tf in enumerate(timeframes)}
     out.sort(key=lambda r: (r["symbol"], order.get(r["tf"], 99)))
-    expected = {(s, tf, n) for s in symbols for tf in timeframes for n in names}
     done = {(j["symbol"], j["tf"], r["strategy"]) for j in out for r in j.get("results", []) if "error" not in r}
     return {"created_utc": pd.Timestamp.now(tz="UTC").isoformat(), "criteria": CRITERIA,
             "selection_scenario": SELECTION_SCENARIO, "risk_rules": asdict(RiskRules()),
@@ -618,14 +630,15 @@ def run_testlauf(cfg: Config, symbols, strategy_names=None, log=print, checkpoin
     errors += [f"{e['symbol']} {e['tf']} {e.get('strategy')}: {e['error']}" for e in h1["errors"]]
 
     reproducible = None
-    if symbols and names:
+    h1_names = strategies_for("H1", names)
+    if symbols and h1_names:
         first_job = next((j for j in h1["jobs"] if j["symbol"] == symbols[0] and "results" in j), None)
         if first_job:
-            ref = next((r for r in first_job["results"] if r.get("strategy") == names[0] and "error" not in r), None)
-            again = run_job(cfg, symbols[0], "H1", [names[0]], log=lambda *a: None, checkpoints=None)
+            ref = next((r for r in first_job["results"] if r.get("strategy") == h1_names[0] and "error" not in r), None)
+            again = run_job(cfg, symbols[0], "H1", [h1_names[0]], log=lambda *a: None, checkpoints=None)
             rep = next((r for r in again.get("results", []) if "error" not in r), None)
             reproducible = ref is not None and rep is not None and _canonical(ref) == _canonical(rep)
-            log(f"  Reproduzierbarkeit {symbols[0]} H1 {names[0]}: {'IDENTISCH' if reproducible else 'ABWEICHUNG'}")
+            log(f"  Reproduzierbarkeit {symbols[0]} H1 {h1_names[0]}: {'IDENTISCH' if reproducible else 'ABWEICHUNG'}")
     ok = not mismatches and not errors and reproducible is not False
     summary = {"ok": ok, "code_fingerprint": code_fingerprint(), "created_utc": pd.Timestamp.now(tz="UTC").isoformat(),
                "signal_mismatches": mismatches, "errors": errors, "reproducible": reproducible,

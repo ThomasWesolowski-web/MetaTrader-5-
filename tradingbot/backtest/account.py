@@ -34,9 +34,10 @@ from .costs import CostScenario
 @dataclass
 class RiskRules:
     initial: float = 1000.0
-    risk_per_trade: float = 0.0025
-    max_daily_loss: float = 0.01
-    max_drawdown: float = 0.05
+    # Freigabe des Nutzers am 20.10.2026 (vorher 0,25 % / 1 % / 5 %)
+    risk_per_trade: float = 0.01
+    max_daily_loss: float = 0.03
+    max_drawdown: float = 0.20
     max_positions: int = 2
     halt_on_max_dd: bool = False
 

@@ -1,7 +1,7 @@
 """Kontraktspezifikationen und Mindestlot gegen das geplante Risiko prüfen (Phase 4, Punkt 3 – nur Dokumentation).
 
 Frage: Bis zu welchem Stop-Abstand bleibt ein Trade mit der kleinsten handelbaren Lotgröße innerhalb des geplanten
-Risikos (0,25 % von 1 000 € = 2,50 €)? Verlust bis zum Stop je Lot = Abstand × Kontraktgröße × Umrechnungskurs
+Risikos (RiskRules: Anteil je Trade vom Referenzkapital, z. B. 1 % von 1 000 € = 10 €)? Verlust bis zum Stop je Lot = Abstand × Kontraktgröße × Umrechnungskurs
 + Kommission (Annahme aus dem Kostenszenario). Der Abstand wird ab dem tatsächlichen Einstiegskurs gemessen, der Spread
 ist also darin enthalten. Es werden weder Kapital noch Risikogrenzen verändert.
 """

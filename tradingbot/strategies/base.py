@@ -132,6 +132,11 @@ class TradeStrategy(Strategy):
     param_grid: list[dict] = []
     description: str = ""
     rules: str = ""
+    # Zeitrahmen, auf denen die Strategie im Backtest geprüft wird (Phase 3: M1 bis H1)
+    timeframes: tuple[str, ...] = ("M1", "M5", "M15", "M30", "H1")
+    # Zeitspanne (Sekunden), die vor einem Signal in den Daten liegen muss (z. B. Wochenbeginn für den
+    # Wochen-VWAP). Die blockweise Berechnung nimmt mindestens so viel Vorlauf.
+    warmup_seconds: int = 0
 
     @abstractmethod
     def entries(self, bars: pd.DataFrame) -> Signals:

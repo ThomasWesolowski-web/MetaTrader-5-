@@ -11,7 +11,7 @@ import pandas as pd
 from tradingbot.server_time import parse_scheme
 from tradingbot.storage import MarketStore, rates_to_frame
 
-TF = {"M5": 300, "M15": 900, "M30": 1800, "H1": 3600, "D1": 86400}
+TF = {"M5": 300, "M15": 900, "M30": 1800, "H1": 3600, "H4": 14400, "D1": 86400}
 DT = [("time", "<i8"), ("open", "<f8"), ("high", "<f8"), ("low", "<f8"), ("close", "<f8"),
       ("tick_volume", "<u8"), ("spread", "<i4"), ("real_volume", "<u8")]
 

@@ -3,6 +3,11 @@
 **Stand:** 18.10.2026 · **Freigabe:** Punkt 1 und 2 umgesetzt, Punkt 3 nur geprüft und dokumentiert (Entscheidung
 offen), Punkt 4 nicht bearbeitet. Arbeitsplan: [phase4_arbeitsplan.md](phase4_arbeitsplan.md).
 
+> **Ergänzung 20.10.2026:** zwei neue Strategien (EMA 20 + Wochen-VWAP, Opening Range Breakout) und neue
+> Risikogrenzen (1 % je Trade, 3 % Tagesverlust, 20 % Drawdown) – siehe
+> [phase4_ergaenzung_strategien.md](phase4_ergaenzung_strategien.md). Angaben zu 0,25 % / 5 % weiter unten
+> beschreiben den Stand vom 18./19.10.2026.
+
 **Sicherheit:** Es werden keine Orders an MetaTrader 5 gesendet, kein Demo- und kein Echtgeldhandel. Der MT5-Zugriff
 ist rein lesend (`MT5Client` enthält keine Order-Funktion; ein Test durchsucht alle Programmdateien nach
 `order_send`/`order_check`). Die Risikogrenzen sind unverändert und für die Beobachtung nicht konfigurierbar

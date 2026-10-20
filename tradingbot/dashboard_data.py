@@ -250,7 +250,7 @@ def paper_trades_table(trades_doc: dict | None) -> pd.DataFrame:
                          "Einstieg": t["einstieg"], "Stop": t["stop"], "Ziel": t.get("ziel"),
                          "Ausstieg (UTC)": str(t.get("ausstieg_utc") or "–")[:16], "Ausstieg": t.get("ausstieg"),
                          "Grund": t.get("ausstiegsgrund"), "Risiko € (0,01)": t.get("risiko_eur"),
-                         "innerhalb 0,25 %": t.get("innerhalb_risikogrenze"),
+                         "innerhalb Risikogrenze": t.get("innerhalb_risikogrenze"),
                          "Brutto €": t.get("brutto_eur"), "Spread €": t.get("spread_eur"),
                          "Slippage € (Annahme)": t.get("slippage_eur"), "Kommission € (Annahme)": t.get("kommission_eur"),
                          "Swap €": t.get("swap_eur"), "Netto €": t.get("netto_eur"), "R netto": t.get("r_netto"),
@@ -322,9 +322,9 @@ def contract_rows(doc: dict | None) -> tuple[pd.DataFrame, pd.DataFrame]:
             tf_rows.append({"Symbol": sym, "TF": tf, "ATR(14)": v.get("atr14"),
                             "max. Stop in ATR": v.get("max_stop_in_atr"),
                             "Risiko € bei 1,5 ATR (0,01 Lot)": v.get("risk_eur_min_lot_1_5atr"),
-                            "1,5 ATR innerhalb 0,25 %": v.get("within_limit_1_5atr"),
+                            "1,5 ATR innerhalb Risikogrenze": v.get("within_limit_1_5atr"),
                             "Risiko € bei 3 ATR (0,01 Lot)": v.get("risk_eur_min_lot_3atr"),
-                            "3 ATR innerhalb 0,25 %": v.get("within_limit_3atr")})
+                            "3 ATR innerhalb Risikogrenze": v.get("within_limit_3atr")})
     return pd.DataFrame(spec_rows), pd.DataFrame(tf_rows)
 
 

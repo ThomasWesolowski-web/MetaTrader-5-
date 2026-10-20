@@ -404,3 +404,83 @@ class KombiBreakoutMomentum(TradeStrategy):
         d = np.concatenate([np.ones(len(iu), int), -np.ones(len(idn), int)])
         st = c[idx] - d * 2.0 * a[idx]
         return Signals.build(idx, d, st, _rr_target(c, idx, d, st, p["rr"]), c, max_bars=3 * p["n"])
+
+
+# =============================================================================== 11. Ergänzungen Phase 4
+@register
+class EmaVwap(TradeStrategy):
+    name = "ema_vwap"
+    description = "Trendfolge: EMA 20 und Wochen-VWAP in derselben Richtung"
+    rules = ("Long: Schluss über der EMA 20 UND über dem Wochen-VWAP (erste Kerze, auf der beides zutrifft). "
+             "Stop: Schluss − atr_mult·ATR. Ausstieg: Schluss unter der EMA 20. Short spiegelbildlich. "
+             "Wochen-VWAP ab Sonntag 17:00 New Yorker Zeit, gewichtet mit dem Tick-Volumen aus MT5.")
+    default_params = {"ema": 20, "atr_mult": 2.0}
+    param_grid = [{"atr_mult": m} for m in (1.5, 2.5)]
+    timeframes = ("M15", "M30", "H1", "H4")
+    warmup_seconds = 10 * 86400       # vollständige Woche vor dem ersten Signal (auch über Wochenenden)
+
+    def entries(self, bars):
+        p = self.params
+        o, h, l, c, a = _arrays(bars)
+        fe = features.get(bars)
+        e, vw = fe.ema(p["ema"]), fe.weekly_vwap()
+        valid = np.isfinite(e) & np.isfinite(vw)
+        with np.errstate(invalid="ignore"):
+            long_ok = (c > e) & (c > vw) & valid
+            short_ok = (c < e) & (c < vw) & valid
+            ex_l, ex_s = c < e, c > e
+        prev_valid = np.concatenate([[False], valid[:-1]])
+        up = long_ok & ~np.concatenate([[False], long_ok[:-1]]) & prev_valid
+        dn = short_ok & ~np.concatenate([[False], short_ok[:-1]]) & prev_valid
+        iu, idn = np.nonzero(up)[0], np.nonzero(dn)[0]
+        idx = np.concatenate([iu, idn])
+        d = np.concatenate([np.ones(len(iu), int), -np.ones(len(idn), int)])
+        st = c[idx] - d * p["atr_mult"] * a[idx]
+        return Signals.build(idx, d, st, np.full(len(idx), np.nan), c, exit_long=ex_l, exit_short=ex_s)
+
+
+# Eröffnungen für den Opening Range Breakout: Zeitzone, Eröffnung und Handelsschluss (Minuten nach Mitternacht)
+ORB_SESSIONS = {
+    "london": ("Europe/London", 8 * 60, 16 * 60 + 30),          # 08:00–16:30 Londoner Zeit
+    "new_york": ("America/New_York", 9 * 60 + 30, 16 * 60),     # 09:30–16:00 New Yorker Zeit
+    "utc": ("UTC", 0, 24 * 60),                                  # 00:00–24:00 UTC
+}
+
+
+@register
+class OpeningRangeBreakout(TradeStrategy):
+    name = "opening_range_breakout"
+    description = "Opening Range Breakout: Ausbruch aus der Spanne der ersten Minuten nach einer Eröffnung"
+    rules = ("Range = Hoch/Tief der ersten range_min Minuten ab der Eröffnung (London 08:00, New York 09:30 Ortszeit "
+             "mit Sommerzeit, oder 00:00 UTC). Danach erster Schluss über dem Range-Hoch: Long, unter dem Range-Tief: "
+             "Short – höchstens ein Trade je Tag und Eröffnung. Stop: Gegenseite der Range. Ziel: rr × Risiko. "
+             "Spätestens zum Handelsschluss (London 16:30, New York 16:00, UTC 24:00) wird geschlossen. "
+             "Tage mit fehlenden Kerzen in der Range werden nicht gehandelt.")
+    default_params = {"session": "new_york", "range_min": 30, "rr": 2.0}
+    param_grid = [{"session": s, "range_min": r, "rr": rr}
+                  for s in ("london", "new_york", "utc") for r in (15, 30, 60) for rr in (1.5, 2.0)]
+    timeframes = ("M1", "M5", "M15")
+    warmup_seconds = 2 * 86400
+
+    def entries(self, bars):
+        p = self.params
+        if p["session"] not in ORB_SESSIONS:
+            raise ValueError(f"{self.name}: unbekannte Eröffnung '{p['session']}' – {sorted(ORB_SESSIONS)}")
+        tz, open_min, close_min = ORB_SESSIONS[p["session"]]
+        o, h, l, c, a = _arrays(bars)
+        fe = features.get(bars)
+        mins, rh, rl, tf_min = fe.opening_range(tz, open_min, p["range_min"])
+        if not np.isfinite(rh).any():
+            return Signals.empty()
+        # Ausstieg zur Eröffnung der Folgekerze, sobald eine Kerze den Handelsschluss erreicht (oder außerhalb liegt)
+        flat = (mins + tf_min >= close_min) | (mins < open_min + p["range_min"])
+        window = (mins + 2 * tf_min < close_min) & np.isfinite(rh)   # Einstiegskerze liegt noch vor Handelsschluss
+        with np.errstate(invalid="ignore"):
+            up, dn = window & (c > rh), window & (c < rl)
+        ev = up | dn
+        t = pd.DatetimeIndex(bars["time"]).tz_convert(tz).tz_localize(None).normalize()
+        first = ev & (pd.Series(ev).groupby(t.as_unit("ns").asi8).cumsum().to_numpy() == 1)
+        idx = np.nonzero(first)[0]
+        d = np.where(up[idx], 1, -1)
+        st = np.where(d == 1, rl[idx], rh[idx])
+        return Signals.build(idx, d, st, _rr_target(c, idx, d, st, p["rr"]), c, exit_long=flat, exit_short=flat)

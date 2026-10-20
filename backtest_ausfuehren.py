@@ -36,7 +36,8 @@ def main(argv=None, client=None) -> int:
     ap = argparse.ArgumentParser(description="Phase 3 – Backtests (nur Simulation)")
     ap.add_argument("--config", default=str(Path(__file__).resolve().parent / "config.toml"))
     ap.add_argument("--symbole", nargs="+", default=None)
-    ap.add_argument("--zeitrahmen", nargs="+", default=["M1", "M5", "M15", "M30", "H1"])
+    ap.add_argument("--zeitrahmen", nargs="+", default=["M1", "M5", "M15", "M30", "H1", "H4"],
+                    help="Jede Strategie läuft nur auf ihren eigenen Zeitrahmen (siehe Bericht)")
     ap.add_argument("--strategien", nargs="+", default=None)
     ap.add_argument("--prozesse", type=int, default=1,
                     help="Anzahl Prozesse (Standard 1; mehr nur bei ausreichend freiem RAM)")

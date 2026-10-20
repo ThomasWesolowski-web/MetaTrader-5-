@@ -18,6 +18,7 @@ import streamlit as st
 
 from tradingbot import dashboard_data as dd
 from tradingbot.backtest.account import RiskRules
+from tradingbot.backtest.report import risk_text
 from tradingbot.config import load_config
 
 ROOT = Path(__file__).resolve().parent
@@ -63,7 +64,7 @@ def de(x: float, nd: int = 2) -> str:
 
 
 st.caption(f"Nur Anzeige – es werden **keine Orders** gesendet, kein Demo- oder Echtgeldhandel. "
-           f"Risikoregeln unverändert: {de(RULES.initial, 0)} € Referenzkapital, {de(100 * RULES.risk_per_trade)} % "
+           f"Risikoregeln: {de(RULES.initial, 0)} € Referenzkapital, {de(100 * RULES.risk_per_trade)} % "
            f"je Trade, {de(100 * RULES.max_daily_loss, 0)} % Tagesverlust, {de(100 * RULES.max_drawdown, 0)} % "
            f"Drawdown-Grenze, max. {RULES.max_positions} Positionen.")
 
@@ -112,7 +113,7 @@ with tab_over:
 # ---------------------------------------------------------------------- Backtest
 with tab_bt:
     st.info("**Historische Simulation (Phase 3)** – keine Live-Ergebnisse. Kosten im Szenario „konservativ“, "
-            "0,25 % Risiko je Trade, 1.000 € Startkapital.")
+            f"{risk_text(data or {'risk_rules': vars(RULES)})}.")
     if data is None:
         st.warning("Keine Phase-3-Ergebnisse gefunden. Erzeugen mit `python backtest_ausfuehren.py`.")
     else:
@@ -162,7 +163,7 @@ with tab_bt:
                 table(folds)
             scen = st.radio("Kostenszenario für Jahresergebnisse", ["konservativ", "basis"], horizontal=True, key="bt_scen")
             table(dd.yearly_table(res, scen))
-            st.write("Risikovarianten (nur Information – freigegeben ist 0,25 %)")
+            st.write(f"Risikovarianten (nur Information – freigegeben sind {de(100 * RULES.risk_per_trade)} %)")
             table(dd.risk_variants_table(res))
         st.subheader("Kosten und Ergebnis je Zeitrahmen (Test, Summe aller Strategien)")
         table(dd.cost_scenarios_by_tf(data))
@@ -182,7 +183,7 @@ with tab_live:
         st.subheader("Kandidaten")
         table(dd.paper_candidates_table(trades_doc))
         st.caption("Ergebnisse je Mindestlot (0,01) zeigen die Strategie unabhängig von der Kontogröße. Das "
-                   "Referenzkonto (1.000 €, 0,25 %) zeigt, welche Trades mit den freigegebenen Risikoregeln überhaupt "
+                   f"Referenzkonto ({de(RULES.initial, 0)} €, {de(100 * RULES.risk_per_trade)} %) zeigt, welche Trades mit den freigegebenen Risikoregeln überhaupt "
                    "ausführbar wären – bei zu großem Stop verhindert die Mindestlotgröße den Trade.")
         eq = dd.paper_equity(trades_doc)
         if not eq.empty:
@@ -216,8 +217,8 @@ with tab_data:
 # ---------------------------------------------------------------------- Kontrakt
 with tab_contract:
     st.info("Punkt 3 (Kapital und Risiko) ist **offen**: Hier wird nur dokumentiert, bis zu welchem Stop-Abstand "
-            "das geplante Risiko (0,25 % von 1.000 € = 2,50 €) mit der kleinsten Lotgröße eingehalten wird. "
-            "Kapital und Risikogrenzen werden nicht verändert.")
+            f"das geplante Risiko ({de(100 * RULES.risk_per_trade)} % von {de(RULES.initial, 0)} € = "
+            f"{de(RULES.initial * RULES.risk_per_trade)} €) mit der kleinsten Lotgröße eingehalten wird.")
     doc = paper["contract"]
     if doc:
         st.write(f"Quelle: {doc['source']} · {doc['created_utc'][:19]} UTC")

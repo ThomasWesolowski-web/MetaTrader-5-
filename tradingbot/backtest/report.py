@@ -25,13 +25,35 @@ def _row(m):
             f"{_v(m['expectancy_r'])} | {_v(m['max_drawdown_pct'])} | {_v(m['sharpe'])}")
 
 
+_OLD_RULES = {"initial": 1000.0, "risk_per_trade": 0.0025, "max_daily_loss": 0.01, "max_drawdown": 0.05,
+              "max_positions": 2}   # Läufe vor dem 20.10.2026 speicherten die Regeln nicht immer
+
+
+def _rules(data: dict) -> dict:
+    return data.get("risk_rules") or _OLD_RULES
+
+
+def _pct(x: float) -> str:
+    return f"{100 * x:g} %".replace(".", ",")
+
+
+def _eur(x: float, nd: int = 2) -> str:
+    return f"{x:,.{nd}f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def risk_text(data: dict) -> str:
+    r = _rules(data)
+    return (f"Risiko {_pct(r['risk_per_trade'])} je Trade, max. {_pct(r['max_daily_loss'])} Tagesverlust, "
+            f"{_pct(r['max_drawdown'])} Drawdown als Testgrenze, max. {r['max_positions']} Positionen, "
+            f"Startkapital {_eur(r['initial'], 0)}")
+
+
 def build_markdown(data: dict, crosscheck: dict | None = None) -> str:
     jobs = [j for j in data["jobs"] if "results" in j]
     L = ["# Phase 3 – Backtest-Bericht (automatisch erzeugt)", "",
          f"- **Erstellt:** {data['created_utc'][:16].replace('T', ' ')} UTC",
          "- **Nur Simulation:** keine Orders an MetaTrader 5, keine Demo- oder Echtgeld-Trades",
-         f"- **Auswahl/Rangliste auf Kostenszenario:** `{SELECTION_SCENARIO}` · Risiko 0,25 % je Trade, "
-         "max. 1 % Tagesverlust, 5 % Drawdown als Testgrenze, max. 2 Positionen, Startkapital 1 000 €", ""]
+         f"- **Auswahl/Rangliste auf Kostenszenario:** `{SELECTION_SCENARIO}` · {risk_text(data)}", ""]
 
     if "units_expected" in data:
         L += ["## Vollständigkeit", "",
@@ -71,7 +93,9 @@ def build_markdown(data: dict, crosscheck: dict | None = None) -> str:
                  f"{p['val_end']} – {p['end']} |")
     L.append("")
 
-    L += ["## Mindestlot-Prüfung (0,25 % von 1 000 € = 2,50 € Risiko)", "",
+    rr = _rules(data)
+    L += [f"## Mindestlot-Prüfung ({_pct(rr['risk_per_trade'])} von {_eur(rr['initial'], 0)} = "
+          f"{_eur(rr['initial'] * rr['risk_per_trade'])} Risiko)", "",
           "| Markt | TF | max. Stopabstand bei Mindestlot | ATR(14) Median (Testzeitraum) | Kerzen mit 1,5·ATR-Stop machbar | mit 3·ATR-Stop |",
           "|---|---|---|---|---|---|"]
     for j in jobs:
@@ -96,7 +120,7 @@ def build_markdown(data: dict, crosscheck: dict | None = None) -> str:
             L += ["Gründe (Top 5):", ""] + [f"- **{r['strategy']} {r['tf']}:** {'; '.join(r['reasons'][:4])}" for r in top] + [""]
 
     L += ["## Risikomodelle (Top 10 je Markt, konservativ)", "",
-          "Parameter wurden mit 0,25 % Risiko gewählt; höhere Risiken nur zum Vergleich (Mindestlot-Effekt).", "",
+          f"Parameter wurden mit {_pct(rr['risk_per_trade'])} Risiko gewählt; die übrigen Risiken nur zum Vergleich.", "",
           "| Markt | TF | Strategie | Risiko | Val Trades / Netto € / DD % / Mindestlot-Ausfall % | Test Trades / Netto € / DD % |",
           "|---|---|---|---|---|---|"]
     for sym, rk in data["rankings"].items():

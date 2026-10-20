@@ -151,3 +151,60 @@ def in_session(time_utc: pd.DatetimeIndex, windows_ny: list[tuple[int, int]]) ->
     for a, b in windows_ny:
         m |= (h >= a) & (h < b)
     return m
+
+
+def bar_seconds(time_utc) -> int:
+    """Kerzenlänge in Sekunden = kleinster positiver Abstand zweier Kerzen (Lücken verlängern nur Abstände)."""
+    t = pd.DatetimeIndex(time_utc).as_unit("ns").asi8
+    d = np.diff(t)
+    d = d[d > 0]
+    return int(d.min() // 10**9) if len(d) else 0
+
+
+def weekly_vwap(time_utc, high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray) -> np.ndarray:
+    """Wochen-VWAP: kumulierter Durchschnitt des typischen Kurses (H+L+C)/3, gewichtet mit dem Volumen,
+    zurückgesetzt zum Wochenbeginn Sonntag 17:00 New Yorker Zeit (Handelswoche von Gold/Devisen, mit Sommerzeit).
+
+    Der Wert an Kerze i nutzt nur Kerzen der laufenden Woche bis einschließlich i. Die erste (in den Daten
+    unvollständige) Woche ist NaN, ebenso Werte ohne Volumen."""
+    t = pd.DatetimeIndex(time_utc).tz_convert("America/New_York").tz_localize(None)
+    shifted = (t + pd.Timedelta(hours=7)).as_unit("ns").asi8      # So 17:00 NY -> Mo 00:00
+    week = (shifted // (86400 * 10**9) - 4) // 7                   # 1970-01-05 war ein Montag
+    v = np.asarray(volume, dtype=float)
+    tp = (np.asarray(high, float) + np.asarray(low, float) + np.asarray(close, float)) / 3
+    g = pd.Series(week)
+    cum_pv = pd.Series(tp * v).groupby(g).cumsum().to_numpy()
+    cum_v = pd.Series(v).groupby(g).cumsum().to_numpy()
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out = np.where(cum_v > 0, cum_pv / cum_v, np.nan)
+    if len(week):
+        out[week == week[0]] = np.nan
+    return out
+
+
+def opening_range(time_utc, high: np.ndarray, low: np.ndarray, tz: str, open_min: int, range_min: int):
+    """Opening Range je Handelstag in Ortszeit `tz`: Hoch und Tief der Kerzen, die im Fenster
+    [open_min, open_min + range_min) Minuten nach Mitternacht beginnen und dort auch enden.
+
+    Rückgabe: (minuten, rh, rl, tf_min) – minuten = Kerzenbeginn in Ortszeit (Minuten nach Mitternacht);
+    rh/rl = Range des Tages der Kerze, aber erst ab der ersten Kerze nach dem Fenster gültig (sonst NaN).
+    Tage mit fehlenden Kerzen im Fenster erhalten keine Range."""
+    n = len(high)
+    nan = np.full(n, np.nan)
+    tf_s = bar_seconds(time_utc)
+    if n == 0 or tf_s == 0 or tf_s % 60 or range_min % (tf_s // 60):
+        return np.zeros(n, dtype=int), nan, nan, tf_s // 60
+    tf_min = tf_s // 60
+    t = pd.DatetimeIndex(time_utc).tz_convert(tz)
+    mins = (t.hour * 60 + t.minute).to_numpy()
+    day = t.tz_localize(None).normalize().as_unit("ns").asi8
+    in_rng = (mins >= open_min) & (mins + tf_min <= open_min + range_min)
+    need = range_min // tf_min
+    df = pd.DataFrame({"day": day[in_rng], "h": np.asarray(high, float)[in_rng], "l": np.asarray(low, float)[in_rng]})
+    agg = df.groupby("day").agg(n=("h", "size"), h=("h", "max"), l=("l", "min"))
+    agg = agg[agg["n"] == need]
+    after = mins >= open_min + range_min
+    rh = pd.Series(day).map(agg["h"]).to_numpy(dtype=float, copy=True)
+    rl = pd.Series(day).map(agg["l"]).to_numpy(dtype=float, copy=True)
+    rh[~after], rl[~after] = np.nan, np.nan
+    return mins, rh, rl, tf_min
