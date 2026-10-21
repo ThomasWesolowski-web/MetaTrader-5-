@@ -6,3 +6,5 @@ reports/
 .env
 data/
 .pytest_cache/
+tmp/
+config.toml.bak

@@ -67,7 +67,7 @@ function Python-Aufruf($eintrag, [string[]]$weitere) {
 }
 
 Write-Host ""
-Write-Host "  Trading-Software Gold & Bitcoin - Installation (Installer-Version 2026-10-21)" -ForegroundColor White
+Write-Host "  Trading-Software Gold & Bitcoin - Installation (Installer-Version 2026-10-21b)" -ForegroundColor White
 Write-Host "  Programmdateien aus: $Quelle"
 Write-Host "  Beobachtung (Paper-Trading) und Dashboard. Es werden KEINE Orders gesendet."
 Write-Host "  Kein Demo- und kein Echtgeldhandel."
@@ -135,6 +135,17 @@ catch { Abbruch "Ordner $Ziel kann nicht angelegt werden: $($_.Exception.Message
 $frei = FreiGB $Ziel
 if ($frei -lt 1.5) { Warnung "Auf diesem Laufwerk sind nur $frei GB frei (empfohlen: mindestens 1,5 GB)." }
 Ok "Ziel: $Ziel ($frei GB frei)"
+$freiSystem = FreiGB $env:SystemDrive
+if ($freiSystem -lt 1) {
+    Warnung ("Auf Laufwerk $env:SystemDrive sind nur $freiSystem GB frei. Windows und MetaTrader 5 brauchen dort Platz " +
+             "(MT5 speichert seine Kurshistorie auf $env:SystemDrive). Bitte dort mindestens 2-3 GB freigeben.")
+    Warnung "Die Installation legt ihre temporären Dateien deshalb auf $Ziel ab."
+}
+# Temporäre Dateien (venv/pip) auf das Ziellaufwerk legen - ein volles Laufwerk C: bricht sonst die Installation ab
+$tmp = Join-Path $Ziel "tmp"
+New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+$env:TEMP = $tmp
+$env:TMP = $tmp
 
 # ------------------------------------------------------------------ 4. Laufende Beobachtung beenden
 Titel "4/7 Laufende Programme beenden"
@@ -154,7 +165,7 @@ if ($Quelle.TrimEnd("\") -ieq $Ziel.TrimEnd("\")) {
 } else {
     $cfg = Join-Path $Ziel "config.toml"
     if (Test-Path $cfg) { Copy-Item $cfg (Join-Path $Ziel "config.toml.bak") -Force }
-    & robocopy $Quelle $Ziel /E /XD .venv data reports __pycache__ .pytest_cache .git /NFL /NDL /NJH /NJS /NP | Out-Null
+    & robocopy $Quelle $Ziel /E /XD .venv data reports tmp __pycache__ .pytest_cache .git /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { Abbruch "Kopieren fehlgeschlagen (robocopy-Code $LASTEXITCODE)." }
     Ok "Programmdateien in $Ziel (vorherige config.toml gesichert als config.toml.bak)"
 }
@@ -209,16 +220,26 @@ foreach ($p in $pythons) {
         Python-Aufruf $p @("-m", "venv", $venvDir)
         if (-not (Test-Path $venvPy)) { Warnung "Umgebung mit Python $($p.Ver) nicht anlegbar."; continue }
     }
+    & $venvPy -m pip --version 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Warnung ("Python-Umgebung mit $($p.Ver) unvollständig (pip fehlt). Häufigste Ursache: kein freier Speicher " +
+                 "auf $env:SystemDrive oder ein Virenscanner blockiert.")
+        Remove-Item $venvDir -Recurse -Force -ErrorAction SilentlyContinue
+        continue
+    }
     & $venvPy -m pip install --no-cache-dir --disable-pip-version-check -q -r (Join-Path $Ziel "requirements.txt")
     if ($LASTEXITCODE -eq 0) {
         & $venvPy -c "import MetaTrader5, streamlit, pandas, pyarrow" 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) { $fertig = $true; Ok "Pakete installiert (Python $($p.Ver))"; break }
     }
-    Warnung "Mit Python $($p.Ver) nicht installierbar (MetaTrader5 gibt es evtl. nicht für diese Version) - nächster Versuch."
+    Warnung "Pakete mit Python $($p.Ver) nicht installierbar (siehe Meldungen oben) - nächster Versuch."
     Remove-Item $venvDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 if (-not $fertig) {
     if ((FreiGB $Ziel) -lt 1) { Abbruch "Paketinstallation fehlgeschlagen - auf dem Laufwerk ist weniger als 1 GB frei." }
+    if ((FreiGB $env:SystemDrive) -lt 1) {
+        Abbruch "Installation fehlgeschlagen: Laufwerk $env:SystemDrive ist voll. Dort Speicher freigeben (mind. 2-3 GB) und INSTALLIEREN.bat erneut starten."
+    }
     Abbruch ("Paketinstallation fehlgeschlagen. Bitte Python 3.13 (64 Bit) von https://www.python.org/downloads/ " +
              "installieren und INSTALLIEREN.bat erneut starten. Die Meldungen oberhalb nennen den Grund.")
 }
@@ -256,6 +277,7 @@ if (JaNein "Soll das Programm automatisch mit Windows starten?" "N") {
     Ok "Autostart entfernt"
 }
 
+Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ""
 Write-Host "  Installation abgeschlossen: $Ziel" -ForegroundColor Green
 Write-Host "  Starten: Desktop-Symbol 'Trading starten'. Beenden: 'Trading stoppen'."

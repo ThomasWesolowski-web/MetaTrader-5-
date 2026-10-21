@@ -7,6 +7,10 @@ rem ==========================================================================
 setlocal
 cd /d "%~dp0"
 title Trading - Start
+rem Temporaere Dateien im Programmordner statt auf C: (dort ist oft wenig Platz)
+if not exist "tmp" mkdir "tmp"
+set "TEMP=%~dp0tmp"
+set "TMP=%~dp0tmp"
 echo.
 echo  Trading-Software Gold und Bitcoin
 echo  Nur Beobachtung - es werden KEINE Orders gesendet.
