@@ -15,7 +15,8 @@ echo.
 rem --- 1. Python-Umgebung (nur beim ersten Start oder nach einem Umzug) ------
 if exist ".venv\Scripts\python.exe" goto venv_ok
 echo  Erster Start: Python-Umgebung wird eingerichtet ...
-py -3 -m venv .venv >nul 2>&1
+rem Python 3.13/3.12/3.11 bevorzugt - dafuer gibt es das Paket MetaTrader5
+for %%V in (3.13 3.12 3.11 3) do if not exist ".venv\Scripts\python.exe" py -%%V -m venv .venv >nul 2>&1
 if not exist ".venv\Scripts\python.exe" python -m venv .venv
 if exist ".venv\Scripts\python.exe" goto venv_ok
 echo.
@@ -32,8 +33,8 @@ echo  Pakete werden installiert, das dauert einige Minuten ...
 ".venv\Scripts\python.exe" -m pip install --no-cache-dir -r requirements.txt
 if not errorlevel 1 goto packages_ok
 echo.
-echo  FEHLER bei der Installation - oft ist die Festplatte voll.
-echo  Freien Speicher pruefen und START erneut ausfuehren.
+echo  FEHLER bei der Installation. Bitte INSTALLIEREN.bat erneut ausfuehren -
+echo  es waehlt eine passende Python-Version und nennt den Grund.
 pause
 exit /b 1
 :packages_ok

@@ -30,24 +30,40 @@ function FreiGB($pfad) {
     return [math]::Round($d.AvailableFreeSpace / 1GB, 1)
 }
 
-function Finde-Python {
-    $kandidaten = @(@("py", "-3"), @("python"))
-    $lokal = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs\Python") -Filter python.exe -Recurse -Depth 1 -ErrorAction SilentlyContinue |
-        Sort-Object FullName -Descending
+$Bevorzugt = @("3.13", "3.12", "3.11")      # für diese Versionen gibt es das Paket MetaTrader5 sicher
+
+function Finde-Pythons {
+    # Alle 64-Bit-Pythons ab 3.11; Reihenfolge: 3.13, 3.12, 3.11, danach neuere Versionen
+    $kandidaten = @(@("py", "-3.13"), @("py", "-3.12"), @("py", "-3.11"), @("py", "-3"), @("python"))
+    $lokal = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs\Python") -Filter python.exe -Recurse -Depth 1 -ErrorAction SilentlyContinue
     foreach ($p in $lokal) { $kandidaten += , @($p.FullName) }
+    $gefunden = @{}
     foreach ($k in $kandidaten) {
         try {
             $argumente = @()
             if ($k.Count -gt 1) { $argumente = $k[1..($k.Count - 1)] }
-            $v = & $k[0] @argumente -c "import sys; print(sys.version_info[0], sys.version_info[1], sys.maxsize > 2**32)" 2>&1 |
+            $v = & $k[0] @argumente -c "import sys, struct; print(sys.version_info[0], sys.version_info[1], struct.calcsize('P') * 8)" 2>&1 |
                 Where-Object { $_ -is [string] } | Select-Object -Last 1
-            if ($LASTEXITCODE -eq 0 -and $v) {
-                $teile = "$v".Trim().Split(" ")
-                if ([int]$teile[0] -eq 3 -and [int]$teile[1] -ge 11 -and $teile[2] -eq "True") { return , $k }
-            }
+            if ($LASTEXITCODE -ne 0 -or -not $v) { continue }
+            $t = "$v".Trim().Split(" ")
+            if ($t.Count -lt 3 -or [int]$t[0] -ne 3 -or [int]$t[1] -lt 11 -or $t[2] -ne "64") { continue }
+            $ver = "$($t[0]).$($t[1])"
+            if (-not $gefunden.ContainsKey($ver)) { $gefunden[$ver] = $k }
         } catch { }
     }
-    return $null
+    $liste = @()
+    foreach ($ver in $Bevorzugt) { if ($gefunden.ContainsKey($ver)) { $liste += , @{ Ver = $ver; Cmd = $gefunden[$ver] } } }
+    foreach ($ver in ($gefunden.Keys | Where-Object { $Bevorzugt -notcontains $_ } | Sort-Object { [version]$_ })) {
+        $liste += , @{ Ver = $ver; Cmd = $gefunden[$ver] }
+    }
+    return , $liste
+}
+
+function Python-Aufruf($eintrag, [string[]]$weitere) {
+    $cmd = $eintrag.Cmd
+    $argumente = @()
+    if ($cmd.Count -gt 1) { $argumente = $cmd[1..($cmd.Count - 1)] }
+    & $cmd[0] @argumente @weitere
 }
 
 Write-Host ""
@@ -57,20 +73,26 @@ Write-Host "  Kein Demo- und kein Echtgeldhandel."
 
 # ------------------------------------------------------------------ 1. Python
 Titel "1/7 Python"
-$py = Finde-Python
-if ($null -eq $py) {
-    Warnung "Python 3.11 oder neuer (64 Bit) wurde nicht gefunden."
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if ($winget -and (JaNein "Python 3.13 jetzt automatisch installieren (winget, ca. 100 MB)?")) {
-        & winget install -e --id Python.Python.3.13 --scope user --accept-package-agreements --accept-source-agreements
-        $py = Finde-Python
+$pythons = Finde-Pythons
+$hatBevorzugt = @($pythons | Where-Object { $Bevorzugt -contains $_.Ver }).Count -gt 0
+if (-not $hatBevorzugt) {
+    if ($pythons.Count -gt 0) {
+        Warnung ("Gefunden: Python " + (($pythons | ForEach-Object { $_.Ver }) -join ", ") +
+                 ". Das MetaTrader5-Paket gibt es sicher für Python 3.11 bis 3.13.")
+    } else {
+        Warnung "Python 3.11 oder neuer (64 Bit) wurde nicht gefunden."
     }
-    if ($null -eq $py) {
-        Abbruch ("Bitte Python von https://www.python.org/downloads/ installieren (Haken bei 'Add python.exe to PATH') " +
-                 "und INSTALLIEREN.bat erneut starten.")
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget -and (JaNein "Python 3.13 zusätzlich installieren (winget, ca. 100 MB, andere Versionen bleiben)?")) {
+        & winget install -e --id Python.Python.3.13 --scope user --accept-package-agreements --accept-source-agreements
+        $pythons = Finde-Pythons
+    }
+    if ($pythons.Count -eq 0) {
+        Abbruch ("Bitte Python 3.13 (64 Bit) von https://www.python.org/downloads/ installieren und " +
+                 "INSTALLIEREN.bat erneut starten.")
     }
 }
-Ok ("Python gefunden: " + ($py -join " "))
+Ok ("Python gefunden: " + (($pythons | ForEach-Object { $_.Ver }) -join ", ") + " - verwendet wird zuerst " + $pythons[0].Ver)
 
 # ------------------------------------------------------------------ 2. MetaTrader 5
 Titel "2/7 MetaTrader 5"
@@ -86,8 +108,8 @@ if ($mt5) {
 # ------------------------------------------------------------------ 3. Zielordner
 Titel "3/7 Installationsordner"
 Write-Host "   Freier Speicher:"
-Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -gt 0 } |
-    ForEach-Object { Write-Host ("     {0}:  {1} GB frei" -f $_.Name, [math]::Round($_.Free / 1GB, 1)) }
+[System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -eq "Fixed" } |
+    ForEach-Object { Write-Host ("     {0}  {1} GB frei" -f $_.Name, [math]::Round($_.AvailableFreeSpace / 1GB, 1)) }
 if ([string]::IsNullOrWhiteSpace($Ziel)) {
     $Ziel = Read-Host "   Ordner für die Installation (Enter = $Standardziel)"
     if ([string]::IsNullOrWhiteSpace($Ziel)) { $Ziel = $Standardziel }
@@ -145,19 +167,46 @@ if (-not (Test-Path (Join-Path $zielDaten "market")) -and ($AlterOrdner.TrimEnd(
     }
 }
 
+if (Test-Path (Join-Path $zielDaten "market")) {
+    $n = @(Get-ChildItem -Path (Join-Path $zielDaten "market") -Recurse -Filter *.parquet -ErrorAction SilentlyContinue).Count
+    Ok "Kursdaten im Ziel vorhanden ($n Dateien in $zielDaten\market)"
+} else {
+    if (Test-Path (Join-Path $AlterOrdner "data\market")) {
+        Warnung "Keine Kursdaten im Ziel. In $AlterOrdner liegen Daten - INSTALLIEREN.bat erneut starten und mit J übernehmen."
+    } else {
+        Warnung ("Keine Kursdaten gefunden. Sie werden beim ersten Start neu aus MT5 geladen (dauert einmalig länger). " +
+                 "Liegen Ihre Daten woanders, den Ordner 'data' von dort nach $Ziel kopieren.")
+    }
+}
+
 # ------------------------------------------------------------------ 6. Python-Umgebung und Pakete
 Titel "6/7 Python-Umgebung und Pakete (beim ersten Mal einige Minuten)"
-$venvPy = Join-Path $Ziel ".venv\Scripts\python.exe"
-if (-not (Test-Path $venvPy)) {
-    $argumente = @()
-    if ($py.Count -gt 1) { $argumente = $py[1..($py.Count - 1)] }
-    & $py[0] @argumente -m venv (Join-Path $Ziel ".venv")
-    if (-not (Test-Path $venvPy)) { Abbruch "Python-Umgebung konnte nicht angelegt werden." }
+$venvDir = Join-Path $Ziel ".venv"
+$venvPy = Join-Path $venvDir "Scripts\python.exe"
+$fertig = $false
+foreach ($p in $pythons) {
+    if (Test-Path $venvPy) {
+        $vv = & $venvPy -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>&1 | Where-Object { $_ -is [string] } | Select-Object -Last 1
+        if ("$vv".Trim() -ne $p.Ver) { Remove-Item $venvDir -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+    if (-not (Test-Path $venvPy)) {
+        Write-Host "   Python-Umgebung mit Python $($p.Ver) wird angelegt ..."
+        Python-Aufruf $p @("-m", "venv", $venvDir)
+        if (-not (Test-Path $venvPy)) { Warnung "Umgebung mit Python $($p.Ver) nicht anlegbar."; continue }
+    }
+    & $venvPy -m pip install --no-cache-dir --disable-pip-version-check -q -r (Join-Path $Ziel "requirements.txt")
+    if ($LASTEXITCODE -eq 0) {
+        & $venvPy -c "import MetaTrader5, streamlit, pandas, pyarrow" 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { $fertig = $true; Ok "Pakete installiert (Python $($p.Ver))"; break }
+    }
+    Warnung "Mit Python $($p.Ver) nicht installierbar (MetaTrader5 gibt es evtl. nicht für diese Version) - nächster Versuch."
+    Remove-Item $venvDir -Recurse -Force -ErrorAction SilentlyContinue
 }
-& $venvPy -m pip install --no-cache-dir --disable-pip-version-check -q -r (Join-Path $Ziel "requirements.txt")
-if ($LASTEXITCODE -ne 0) { Abbruch "Paketinstallation fehlgeschlagen - oft ist die Festplatte voll. Speicher freigeben und erneut starten." }
-& $venvPy -c "import MetaTrader5, streamlit, pandas, pyarrow" 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) { Abbruch "Pakete sind nicht vollständig installiert." }
+if (-not $fertig) {
+    if ((FreiGB $Ziel) -lt 1) { Abbruch "Paketinstallation fehlgeschlagen - auf dem Laufwerk ist weniger als 1 GB frei." }
+    Abbruch ("Paketinstallation fehlgeschlagen. Bitte Python 3.13 (64 Bit) von https://www.python.org/downloads/ " +
+             "installieren und INSTALLIEREN.bat erneut starten. Die Meldungen oberhalb nennen den Grund.")
+}
 Ok "Python-Umgebung bereit"
 
 # ------------------------------------------------------------------ 7. Symbole
