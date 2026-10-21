@@ -67,7 +67,8 @@ function Python-Aufruf($eintrag, [string[]]$weitere) {
 }
 
 Write-Host ""
-Write-Host "  Trading-Software Gold & Bitcoin - Installation" -ForegroundColor White
+Write-Host "  Trading-Software Gold & Bitcoin - Installation (Installer-Version 2026-10-21)" -ForegroundColor White
+Write-Host "  Programmdateien aus: $Quelle"
 Write-Host "  Beobachtung (Paper-Trading) und Dashboard. Es werden KEINE Orders gesendet."
 Write-Host "  Kein Demo- und kein Echtgeldhandel."
 
@@ -110,11 +111,25 @@ Titel "3/7 Installationsordner"
 Write-Host "   Freier Speicher:"
 [System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -eq "Fixed" } |
     ForEach-Object { Write-Host ("     {0}  {1} GB frei" -f $_.Name, [math]::Round($_.AvailableFreeSpace / 1GB, 1)) }
-if ([string]::IsNullOrWhiteSpace($Ziel)) {
-    $Ziel = Read-Host "   Ordner für die Installation (Enter = $Standardziel)"
-    if ([string]::IsNullOrWhiteSpace($Ziel)) { $Ziel = $Standardziel }
+# Nur einfache, vollständige Pfade wie D:\Trading\TradingBot (Laufwerk + Buchstaben, Ziffern, Leerzeichen, - _ .)
+$muster = '^[A-Za-z]:\\([A-Za-z0-9 _.\-]+\\?)*$'
+while ($true) {
+    if ([string]::IsNullOrWhiteSpace($Ziel)) {
+        $Ziel = Read-Host "   Ordner für die Installation eintippen, z. B. D:\Trading\TradingBot (Enter = $Standardziel)"
+        if ([string]::IsNullOrWhiteSpace($Ziel)) { $Ziel = $Standardziel }
+    }
+    $Ziel = $Ziel.Trim().Trim('"').TrimEnd("\")
+    $laufwerk = if ($Ziel.Length -ge 2) { $Ziel.Substring(0, 2) + "\" } else { "" }
+    if ($Ziel -notmatch $muster) {
+        Warnung "Ungültiger Ordnername: '$Ziel'. Bitte einen Pfad wie D:\Trading\TradingBot eintippen (keine Sonderzeichen wie & % !)."
+    } elseif (-not (Test-Path $laufwerk)) {
+        Warnung "Laufwerk $laufwerk gibt es nicht."
+    } elseif (JaNein "Installieren nach $Ziel ?") {
+        break
+    }
+    $Ziel = ""
 }
-$Ziel = [System.IO.Path]::GetFullPath($Ziel.Trim().Trim('"'))
+$Ziel = [System.IO.Path]::GetFullPath($Ziel)
 try { New-Item -ItemType Directory -Force -Path $Ziel -ErrorAction Stop | Out-Null }
 catch { Abbruch "Ordner $Ziel kann nicht angelegt werden: $($_.Exception.Message)" }
 $frei = FreiGB $Ziel
