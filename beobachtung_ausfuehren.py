@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from tradingbot.config import load_config
+from tradingbot.execution import RELEASE_FILE
 from tradingbot.mt5_client import MT5Error
 from tradingbot.paper import Observer, PaperStore
 from tradingbot.paper.observer import STOP_FILE
@@ -55,6 +56,11 @@ def show_status(cfg) -> int:
     print(f"Letzter Durchlauf: {status['updated_utc'][:19]} UTC (Nr. {status['durchlauf']})")
     for sym, m in status["maerkte"].items():
         print(f"  {sym}: {m['zustand']} (Tick {m['tick_utc']}, Alter {m['tick_alter_s']} s)")
+    h = status.get("handel") or {}
+    print(f"  Handel (Demo): {'aktiv' if h.get('aktiv') else 'aus'} – {h.get('grund')}"
+          + (f" – GESTOPPT: {h.get('stopp_grund')}" if h.get("gestoppt") else "")
+          + (f" – Tagesgrenze erreicht" if h.get("tageslimit_erreicht") else "")
+          + (f", offene Positionen {h.get('offene_positionen')}, Drawdown {h.get('drawdown_pct')} %" if h.get("aktiv") else ""))
     for key, c in (trades.get("kandidaten") or {}).items():
         ml = c.get("mindestlot") or {}
         print(f"  {key}: seit {c['beobachtung_seit_utc'][:16]}, letzte Kerze {str(c['letzte_kerze_utc'])[:16]}, "
@@ -71,10 +77,19 @@ def main(argv=None, client=None, now_utc_fn=None, sleep=None) -> int:
     ap.add_argument("--einmal", action="store_true", help="nur einen Durchlauf ausführen und beenden")
     ap.add_argument("--intervall", type=int, help="Sekunden zwischen zwei Durchläufen (Standard aus config.toml: 60)")
     ap.add_argument("--status", action="store_true", help="gespeicherten Stand anzeigen, ohne MT5-Verbindung")
+    ap.add_argument("--handel-freigeben", action="store_true",
+                    help="nach einem Handelsstopp (20 %% Drawdown) den Demo-Handel wieder freigeben")
     args = ap.parse_args(argv)
     cfg = load_config(args.config)
     if args.status:
         return show_status(cfg)
+    if args.handel_freigeben:
+        f = Path(cfg.data_root) / "paper" / RELEASE_FILE
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("freigegeben\n", encoding="utf-8")
+        print("Freigabe gespeichert: Der Demo-Handel läuft beim nächsten Durchlauf der Beobachtung wieder "
+              "(Drawdown wird ab dem aktuellen Kontostand neu gemessen).")
+        return 0
     if args.intervall is not None and args.intervall < 10:
         ap.error("--intervall muss mindestens 10 Sekunden betragen")
 
@@ -83,7 +98,8 @@ def main(argv=None, client=None, now_utc_fn=None, sleep=None) -> int:
         print("Die Beobachtung läuft bereits in einem anderen Fenster – kein zweiter Start.")
         return 3
     (Path(cfg.data_root) / "paper" / STOP_FILE).unlink(missing_ok=True)   # alte Stopp-Anforderung verwerfen
-    print("Phase 4 – Beobachtung (Paper-Trading): keine Orders, kein Demo- oder Echtgeldhandel")
+    print("Beobachtung und Signale" + (" – Orders NUR auf dem Demokonto ([execution] orders_enabled = true)"
+                                       if cfg.execution.orders_enabled else " – keine Orders"))
     print(f"Kandidaten: {', '.join(c.key for c in cfg.paper.candidates)}")
     print(f"Ablage: {Path(cfg.data_root) / 'paper'}")
     if client is None:

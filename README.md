@@ -1,7 +1,7 @@
 # Trading-Software Gold & Bitcoin (MetaTrader 5)
 
 Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schrittweise entwickelt wird.
-**Aktueller Stand: Phase 4 – Dashboard und Beobachtung (Paper-Trading) umgesetzt. Es werden keine Trades ausgeführt und keine Orders gesendet.**
+**Aktueller Stand: Phase 5 – Demo-Handel (Orders nur auf dem Demokonto, siehe docs/phase5_demohandel.md).**
 
 ## Phasen
 
@@ -11,7 +11,7 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 | 2 | Datenbasis: Import, Parquet-Speicher, UTC, Qualitätsprüfung, EUR-Risikorechnung | ✅ umgesetzt – [Ergebnis](docs/phase2_ergebnis.md) |
 | 3 | Strategiebibliothek, Backtests, Walk-Forward, Strategieauswahl | ✅ abgeschlossen – 120/120 Testeinheiten, keine Strategie geeignet ([Ergebnis](docs/phase3_ergebnis.md)) |
 | 4 | Streamlit-Dashboard, Beobachtung (Paper-Trading) der BTC-Trendfolge-Kandidaten, Kontrakt-/Mindestlotprüfung | 🔄 Punkte 1 und 2 umgesetzt – [Arbeitsplan](docs/phase4_arbeitsplan.md), [Ergebnis](docs/phase4_ergebnis.md); Ergänzung 20.10.: Strategien EMA 20 + Wochen-VWAP und Opening Range Breakout, Risiko 1 % / Tagesverlust 3 % / Drawdown 20 % ([Details](docs/phase4_ergaenzung_strategien.md)); Punkt 4 sonst zurückgestellt |
-| 5+ | Demo-Handel | ⏸ nicht freigegeben |
+| 5 | Demo-Handel: Orders für die Signale, nur Demokonto, 1,5 % Risiko, Stopp bei 20 % Drawdown | 🔄 umgesetzt – [Beschreibung](docs/phase5_demohandel.md) |
 
 ## Phase 4: Dashboard und Beobachtung (keine Orders)
 

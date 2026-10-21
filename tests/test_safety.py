@@ -7,11 +7,14 @@ ROOT = Path(__file__).resolve().parent.parent
 PATTERN = re.compile(r"\.\s*order_(send|check)\s*\(")
 
 
-def test_no_order_functions_in_production_code():
+def test_order_functions_only_in_execution_module():
+    """Orders sendet ausschließlich tradingbot/execution.py (Demokonto, Phase 5) – sonst nirgends."""
     files = list((ROOT / "tradingbot").rglob("*.py")) + list(ROOT.glob("*.py"))
     assert files
-    offenders = [str(f) for f in files if PATTERN.search(f.read_text(encoding="utf-8"))]
+    offenders = [str(f) for f in files if PATTERN.search(f.read_text(encoding="utf-8"))
+                 and f.resolve() != (ROOT / "tradingbot" / "execution.py").resolve()]
     assert offenders == []
+    assert "trade_mode" in (ROOT / "tradingbot" / "execution.py").read_text(encoding="utf-8")
 
 
 def test_windows_start_files_are_crlf_ascii_and_read_only():

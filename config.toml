@@ -67,3 +67,21 @@ symbol = "BTCUSD"
 timeframe = "M30"
 strategy = "ema_trend"
 params = { fast = 50, slow = 200, atr_mult = 3.0 }
+
+[[paper.candidates]]
+symbol = "BTCUSD"
+timeframe = "M15"
+strategy = "sma_box_trend"
+params = {}
+
+[[paper.candidates]]
+symbol = "XAUUSD"
+timeframe = "M15"
+strategy = "sma_box_trend"
+params = {}
+
+[execution]
+# Phase 5 (Freigabe 21.10.2026): Orders für die Signale aller Kandidaten oben – NUR auf einem DEMOKONTO.
+# Bei einem Echtgeldkonto sendet das Programm keine Orders (fest im Code). false = nur beobachten.
+orders_enabled = true
+deviation_points = 100

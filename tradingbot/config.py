@@ -59,6 +59,13 @@ class PaperConfig:
 
 
 @dataclass
+class ExecutionConfig:
+    """Orderausführung (Phase 5) – NUR auf einem Demokonto; das prüft tradingbot/execution.py selbst."""
+    orders_enabled: bool = False      # Standard aus: ohne ausdrückliche Einstellung keine Orders
+    deviation_points: int = 100       # erlaubte Kursabweichung bei Marktorders (Points)
+
+
+@dataclass
 class Config:
     data_root: Path = Path("data")
     report_dir: Path = Path("reports")
@@ -76,6 +83,7 @@ class Config:
     timezone_reference_symbol: str = "XAUUSD"
     quality: QualityConfig = field(default_factory=QualityConfig)
     paper: PaperConfig = field(default_factory=PaperConfig)
+    execution: ExecutionConfig = field(default_factory=ExecutionConfig)
 
     def calendar_for(self, symbol: str) -> str:
         return self.calendars.get(symbol, "24x7")
@@ -130,4 +138,15 @@ def load_config(path: str | Path | None = None) -> Config:
         raise ValueError(f"Unbekannte Einstellung [paper].{sorted(unknown)[0]}")
     for c in cfg.paper.candidates:
         seconds(c.timeframe)
+
+    ex = raw.get("execution", {})
+    unknown = set(ex) - {"orders_enabled", "deviation_points"}
+    if unknown:
+        raise ValueError(f"Unbekannte Einstellung [execution].{sorted(unknown)[0]}")
+    if "orders_enabled" in ex:
+        if not isinstance(ex["orders_enabled"], bool):
+            raise ValueError("[execution].orders_enabled muss true oder false sein")
+        cfg.execution.orders_enabled = ex["orders_enabled"]
+    if "deviation_points" in ex:
+        cfg.execution.deviation_points = int(ex["deviation_points"])
     return cfg

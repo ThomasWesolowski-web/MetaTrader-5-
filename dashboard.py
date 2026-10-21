@@ -1,4 +1,4 @@
-"""Phase 4 – Dashboard (nur Anzeige, keine Orders).
+"""Dashboard (nur Anzeige – das Dashboard selbst sendet keine Orders).
 
 Start (Windows, im Projektordner, .venv aktiv):
     streamlit run dashboard.py
@@ -63,7 +63,8 @@ def de(x: float, nd: int = 2) -> str:
     return f"{x:,.{nd}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-st.caption(f"Nur Anzeige – es werden **keine Orders** gesendet, kein Demo- oder Echtgeldhandel. "
+st.caption(f"Das Dashboard zeigt nur an und sendet **keine Orders**. Orders sendet ausschließlich die Beobachtung, "
+           f"und nur auf einem Demokonto, wenn in config.toml freigegeben. "
            f"Risikoregeln: {de(RULES.initial, 0)} € Referenzkapital, {de(100 * RULES.risk_per_trade)} % "
            f"je Trade, {de(100 * RULES.max_daily_loss, 0)} % Tagesverlust, {de(100 * RULES.max_drawdown, 0)} % "
            f"Drawdown-Grenze, max. {RULES.max_positions} Positionen.")
@@ -91,7 +92,7 @@ with tab_over:
             for sym in (data.get("rankings") or {}):
                 st.write(f"**{sym}:** {dd.verdict(data, sym)}")
     with c2:
-        st.subheader("Live-Beobachtung (hypothetisch)")
+        st.subheader("Live-Beobachtung und Demo-Handel")
         status = paper["status"]
         if not status:
             st.info("Noch keine Beobachtungsdaten. Start: `python beobachtung_ausfuehren.py`")
@@ -102,6 +103,16 @@ with tab_over:
                 st.warning("Die Beobachtung läuft derzeit nicht – in dieser Zeit entstehen keine Beobachtungsdaten.")
             for sym, m in status["maerkte"].items():
                 st.write(f"{sym}: {m['zustand']}")
+            h = status.get("handel") or {}
+            if h.get("gestoppt"):
+                st.error(f"Demo-Handel GESTOPPT: {h.get('stopp_grund')}. Freigabe: "
+                         "`python beobachtung_ausfuehren.py --handel-freigeben`")
+            elif h.get("aktiv"):
+                st.success(f"Orders auf dem Demokonto aktiv – Kontostand {h.get('kontostand')} €, Drawdown "
+                           f"{h.get('drawdown_pct')} %, offene Positionen {h.get('offene_positionen')}"
+                           + (" – Tagesverlustgrenze erreicht" if h.get("tageslimit_erreicht") else ""))
+            else:
+                st.info(f"Keine Orders: {h.get('grund', 'nur Beobachtung')}")
             for key, k in status["kandidaten"].items():
                 st.write(f"{key}: {k['signale']} Signale, {k['offen']} offen, {k['geschlossen']} geschlossen")
     fr = dd.freshness_table(cfg.data_root, now)
@@ -171,7 +182,8 @@ with tab_bt:
 # ---------------------------------------------------------------------- Live-Beobachtung
 with tab_live:
     st.warning("**Live-Beobachtung (Paper-Trading)** – hypothetische Ein- und Ausstiege mit neuen Live-Kursen. "
-               "Es werden keine Orders gesendet. Diese Zahlen sind von den Backtest-Ergebnissen getrennt.")
+               "Die Tabellen zeigen die hypothetische Rechnung (je 0,01 Lot und Referenzkonto), getrennt vom Backtest. "
+               "Tatsächliche Demo-Orders stehen im Ereignisprotokoll (order_eroeffnet / order_geschlossen) und im MT5-Terminal.")
     trades_doc = paper["trades"]
     status = paper["status"]
     if not trades_doc:

@@ -38,6 +38,7 @@ from ..backtest.costs import scenarios_for
 from ..backtest.engine import simulate
 from ..backtest.metrics import compute
 from ..config import Config, PaperCandidate
+from ..execution import DemoExecutor
 from ..instruments import CurrencyConverter, InstrumentSpec
 from ..risk_check import check_symbol
 from ..server_time import parse_scheme
@@ -70,6 +71,7 @@ class Observer:
         self.rules = RiskRules()          # wie im Backtest – bewusst nicht über config.toml einstellbar
         self.snap: dict[str, dict] = {}
         self.cycles = 0
+        self.executor: DemoExecutor | None = None
 
     # ------------------------------------------------------------------ Start
     def start(self) -> None:
@@ -104,8 +106,16 @@ class Observer:
         self.store.event("programmstart", now, konto=self.account, zeitschema=self.scheme.name,
                          kandidaten=[{"key": c.key, "params": c.params} for c in self.pc.candidates],
                          risikoregeln=asdict(self.rules), kostenszenario=self.pc.cost_scenario)
-        self.log(f"Konto: {self.account['mode']}, {self.account['currency']}, Hebel 1:{self.account['leverage']:g} – "
-                 f"nur lesender Zugriff, keine Orders")
+        if self.cfg.execution.orders_enabled:
+            self.executor = DemoExecutor(self.client.mt5, self.store, self.state, self.rules,
+                                         self.cfg.execution.deviation_points, self.log)
+            self.executor.start(now)
+            orders = f"ORDERS: {self.executor.reason}"
+        else:
+            orders = "nur Beobachtung, keine Orders ([execution] orders_enabled = false)"
+        self.log(f"Konto: {self.account['mode']}, {self.account['currency']}, Hebel 1:{self.account['leverage']:g} – {orders}")
+        self.log(f"Risiko je Trade {100 * self.rules.risk_per_trade:g} %, Tagesverlust {100 * self.rules.max_daily_loss:g} %, "
+                 f"Handelsstopp bei {100 * self.rules.max_drawdown:g} % Drawdown, max. {self.rules.max_positions} Positionen")
         try:
             self.contract_check(now)
         except Exception as e:  # die Prüfung darf die Beobachtung nicht verhindern
@@ -249,6 +259,12 @@ class Observer:
             except Exception as e:
                 self.store.event("fehler", now, bereich="verbindung", meldung=f"{type(e).__name__}: {e}")
 
+        if self.executor:
+            try:
+                self.executor.account_checks(now, now_srv)
+            except Exception as e:
+                self.store.event("fehler", now, bereich="handel", meldung=f"{type(e).__name__}: {e}")
+
         cache = {}
 
         def eur():
@@ -276,6 +292,7 @@ class Observer:
         self.store.write_trades(doc)
         status = {"updated_utc": now.isoformat(), "durchlauf": self.cycles, "konto": self.account,
                   "zeitschema": self.scheme.name, "maerkte": status_m, "arbeitsspeicher": resources.snapshot(),
+                  "handel": self.executor.status() if self.executor else {"aktiv": False, "grund": "Orders ausgeschaltet"},
                   "kandidaten": {k: {"beobachtung_seit_utc": v["beobachtung_seit_utc"], "letzte_kerze_utc": v["letzte_kerze_utc"],
                                      "signale": len(v["signale"]), "offen": sum(1 for x in v["trades"] if x["status"] == "offen"),
                                      "geschlossen": sum(1 for x in v["trades"] if x["status"] == "geschlossen")}
@@ -386,6 +403,7 @@ class Observer:
         with features.shared(bars):
             sig = create(cand.strategy, **cand.params).entries(bars)
         skeys = [f"{int(srv[int(i)])}|{int(dd)}" for i, dd in zip(sig.idx, sig.direction)]
+        new_live = []
         for k, sk in enumerate(skeys):
             i = int(sig.idx[k])
             if srv[i] < start_srv or sk in st["accepted"] or sk in st["rejected"]:
@@ -409,6 +427,8 @@ class Observer:
             else:
                 st["accepted"][sk] = info
                 self.store.event("signal", now, kandidat=key, **info)
+                if i == n - 1:
+                    new_live.append(k)          # Einstieg jetzt = Eröffnung der Folgekerze
         present = set(skeys)
         for sk, info in st["accepted"].items():
             if sk not in present and not info.get("verschwunden"):
@@ -422,6 +442,18 @@ class Observer:
         sp = costs.spread_price(bars["spread"].to_numpy(), spec.point)
         raw, _ = simulate(bars, sub, tf_s, sp, costs.slippage_frac, self.rules.max_positions)
         o, c = bars["open"].to_numpy(dtype=float), bars["close"].to_numpy(dtype=float)
+
+        if self.executor:                       # Demokonto: Ausstiege prüfen, dann neue Signale ausführen
+            try:
+                self.executor.manage(cand, bars, sig, now)
+                if new_live:
+                    live_conv = self._live_converter()
+                    for k in new_live:
+                        self.executor.open(cand, skeys[k], int(sig.direction[k]), float(sig.stop[k]),
+                                           float(sig.target[k]), int(srv[-1]) + tf_s, spec, costs, live_conv,
+                                           self.account["currency"], now)
+            except Exception as e:
+                self.store.event("fehler", now, kandidat=key, bereich="handel", meldung=f"{type(e).__name__}: {e}")
 
         traded = set()
         current = {}

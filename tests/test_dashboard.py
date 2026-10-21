@@ -79,7 +79,7 @@ def test_offline_contract_check_from_stored_data(tmp_path):
     synthetic_store.build(tmp_path / "data", start="2023-06-01", end="2024-01-01", tfs=("M15", "H1"))
     doc = dd.offline_contract_check(tmp_path / "data", tfs=("M15", "H1"))
     btc = doc["symbols"]["BTCUSD"]
-    assert btc["risk_eur"] == 10.0 and btc["max_stop_distance"] > 0          # 1 % von 1 000 €
+    assert btc["risk_eur"] == 15.0 and btc["max_stop_distance"] > 0          # 1,5 % von 1 000 €
     assert btc["by_timeframe"]["H1"]["atr14"] > 0
     specs, tfs = dd.contract_rows(doc)
     assert set(specs["Symbol"]) == {"XAUUSD", "BTCUSD"} and len(tfs) == 4

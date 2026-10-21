@@ -143,10 +143,10 @@ def test_blocks_use_time_based_warmup(name):
         assert _same_signals(a, b), (name, p)
 
 
-def test_risk_rules_approved_20_10_2026():
+def test_risk_rules_approved_21_10_2026():
     r = RiskRules()
     assert (r.initial, r.risk_per_trade, r.max_daily_loss, r.max_drawdown, r.max_positions) == \
-        (1000.0, 0.01, 0.03, 0.20, 2)
+        (1000.0, 0.015, 0.045, 0.20, 2)
     assert CRITERIA["validation_max_dd_pct"] == 20.0 and CRITERIA["test_max_dd_pct"] == 20.0
 
 

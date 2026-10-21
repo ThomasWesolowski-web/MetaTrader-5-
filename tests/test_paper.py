@@ -241,11 +241,11 @@ def test_contract_check_documents_stop_limits(setup):
     btc = doc["symbols"]["BTCUSD"]
     eurusd = fake._eurusd()
     price = btc["price"]
-    # 10 € (1 % von 1 000 €) je 0,01 Lot: (10/0,01 − Kommission je Lot) / (Kontraktgröße × USD→EUR)
+    # 15 € (1,5 % von 1 000 €) je 0,01 Lot: (15/0,01 − Kommission je Lot) / (Kontraktgröße × USD→EUR)
     comm_lot = 0.0004 * price / eurusd
-    expected = (10.0 / 0.01 - comm_lot) / (1.0 / eurusd)
+    expected = (15.0 / 0.01 - comm_lot) / (1.0 / eurusd)
     assert btc["max_stop_distance"] == pytest.approx(expected, rel=1e-4)
-    assert btc["risk_eur"] == 10.0 and btc["reference_capital_eur"] == 1000.0
+    assert btc["risk_eur"] == 15.0 and btc["reference_capital_eur"] == 1000.0
     assert set(btc["by_timeframe"]) == {"M1", "M5", "M15", "M30", "H1"}
     assert btc["spec_differences"] == []
     assert "XAUUSD" in doc["symbols"]
@@ -292,9 +292,9 @@ def test_risk_rules_are_fixed():
         load_config(d / "config.toml")
     obs = Observer(Config(), client=None)
     assert obs.rules == RiskRules() and obs.rules.initial == 1000.0
-    # Freigabe des Nutzers vom 20.10.2026 – Änderungen nur mit ausdrücklicher Zustimmung
+    # Freigabe des Nutzers vom 21.10.2026 – Änderungen nur mit ausdrücklicher Zustimmung
     assert (obs.rules.risk_per_trade, obs.rules.max_daily_loss, obs.rules.max_drawdown, obs.rules.max_positions) == \
-        (0.01, 0.03, 0.20, 2)
+        (0.015, 0.045, 0.20, 2)
 
 
 def test_missing_conversion_rate_gives_no_euro_values(setup):
