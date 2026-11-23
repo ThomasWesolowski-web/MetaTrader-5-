@@ -33,9 +33,17 @@ Protokoll).
 | BTCUSD | M30 | ema_trend (50/200, 3 ATR) | Phase 3: positiv bei 1 %, statistisch schwach |
 | BTCUSD | M15 | sma_box_trend | **noch kein Backtest auf echten Daten** |
 | XAUUSD | M15 | sma_box_trend | **noch kein Backtest auf echten Daten** |
+| XAUUSD | M5 | opening_range_breakout (New York, 15 Min., rr 1,5) | **noch kein Backtest auf echten Daten** (Day-Trading, Freigabe 23.11.2026) |
+| BTCUSD | M5 | opening_range_breakout (New York, 15 Min., rr 1,5) | **noch kein Backtest auf echten Daten** (Day-Trading, Freigabe 23.11.2026) |
 
 `sma_box_trend` wird auf Wunsch des Nutzers ohne Backtest-Ergebnis gehandelt. Die Vorlage nannte Bitcoin und Gold;
 deshalb laufen beide Märkte. Ein Markt lässt sich in `config.toml` durch Löschen des Eintrags entfernen.
+
+**Day-Trading (23.11.2026):** Auf Wunsch des Nutzers handelt der Opening Range Breakout automatisch, ohne Zustimmung
+je Order. Range = Hoch/Tief 09:30–09:45 New York, Einstieg beim ersten Schluss außerhalb, Stop an der Gegenseite der
+Range, Ziel 1,5 × Risiko, höchstens ein Trade je Tag und Markt, spätestens 16:00 New York geschlossen. Es gelten
+dieselben festen Grenzen wie oben (Demokonto, 1,5 %, 4,5 %, 20 %, 2 Positionen über alle Strategien). Die
+Day-Trader-Skills (`docs/daytrader_skills.md`) fragen weiterhin bei jeder Order nach.
 
 ## Protokoll und Anzeige
 

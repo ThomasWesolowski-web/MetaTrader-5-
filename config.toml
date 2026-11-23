@@ -80,6 +80,20 @@ timeframe = "M15"
 strategy = "sma_box_trend"
 params = {}
 
+# Day-Trading (Freigabe 23.11.2026): Opening Range Breakout automatisch, nur Demokonto, Grenzen wie oben.
+# Range 15 Min. ab 09:30 New York, Stop Gegenseite der Range, Ziel 1,5 x Risiko, glatt spätestens 16:00 New York.
+[[paper.candidates]]
+symbol = "XAUUSD"
+timeframe = "M5"
+strategy = "opening_range_breakout"
+params = { session = "new_york", range_min = 15, rr = 1.5 }
+
+[[paper.candidates]]
+symbol = "BTCUSD"
+timeframe = "M5"
+strategy = "opening_range_breakout"
+params = { session = "new_york", range_min = 15, rr = 1.5 }
+
 [execution]
 # Phase 5 (Freigabe 21.10.2026): Orders für die Signale aller Kandidaten oben – NUR auf einem DEMOKONTO.
 # Bei einem Echtgeldkonto sendet das Programm keine Orders (fest im Code). false = nur beobachten.

@@ -2,6 +2,8 @@
 
 from collections import namedtuple
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,7 +11,7 @@ import pytest
 import beobachtung_ausfuehren
 from fake_market import FakeMT5
 from test_paper import CANDS, make_observer, run_steps, write_specs
-from tradingbot.config import Config, load_config
+from tradingbot.config import Config, PaperCandidate, load_config
 from tradingbot.execution import MAGIC, DemoExecutor
 from tradingbot.backtest.account import RiskRules
 from tradingbot.paper import PaperStore
@@ -265,3 +267,29 @@ def test_position_ticket_differs_from_order_ticket(tmp_path):
     rec = ex.open(_Cand, "k1", 1, ask - 500, float("nan"), 0, spec, scenarios_for("BTCUSD")["konservativ"], conv,
                   "EUR", pd.Timestamp("2026-03-02", tz="UTC"))
     assert rec["ticket"] in fake.positions                 # verfolgt wird die tatsächliche Position
+
+
+ORB = PaperCandidate("XAUUSD", "M5", "opening_range_breakout", {"session": "new_york", "range_min": 15, "rr": 1.5})
+
+
+def test_repo_config_trades_orb_day_trades_automatically():
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    orb = [c for c in cfg.paper.candidates if c.strategy == "opening_range_breakout"]
+    assert {(c.symbol, c.timeframe) for c in orb} == {("XAUUSD", "M5"), ("BTCUSD", "M5")}
+    assert all(c.params == {"session": "new_york", "range_min": 15, "rr": 1.5} for c in orb)
+    assert cfg.execution.orders_enabled is True
+
+
+def test_orb_candidate_opens_and_flattens_by_new_york_close_without_approval(trading):
+    fake, cfg = trading
+    cfg.paper.candidates = [ORB]
+    obs = make_observer(fake, cfg)
+    run_steps(obs, fake, "2026-03-07 00:00", step_min=5)
+    opened = events(cfg, "order_eroeffnet")
+    assert opened and all(e["kandidat"] == ORB.key for e in opened)
+    for e in opened:                                                  # Einstieg nach der Range, vor 16:00 New York
+        t = pd.Timestamp(e["utc"]).tz_convert("America/New_York")
+        assert 9 * 60 + 45 <= t.hour * 60 + t.minute < 16 * 60
+        assert e["risiko_eur"] <= 1000 * RiskRules().risk_per_trade + 1e-6
+    assert len({pd.Timestamp(e["utc"]).tz_convert("America/New_York").date() for e in opened}) == len(opened)
+    assert not [p for p in fake.positions.values() if p.magic == MAGIC]   # über Nacht nichts offen
