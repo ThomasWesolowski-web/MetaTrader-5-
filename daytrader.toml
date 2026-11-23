@@ -1,0 +1,46 @@
+# Day-Trader-Skills für MetaTrader 5 (Claude-Skills unter .claude/skills/mt5-*) – Beschreibung: docs/daytrader_skills.md
+# Unabhängig vom Bot: eigene Grenzen, eigene Magic-Nummer (20261123). Orders NUR auf einem DEMOKONTO (fest im Code).
+# Zeiten in der Ortszeit der jeweiligen Sitzung (zeitzone), z. B. America/New_York oder Europe/Berlin.
+
+symbole = ["XAUUSD", "BTCUSD"]   # was der Scanner durchsucht (Kurse aus data/market und, falls offen, live aus MT5)
+zeitrahmen = "M5"                # Kerzen für Scanner, Einstieg und Time Machine
+kostenszenario = "konservativ"   # wie im Backtest (Spread x 1,5, Kommission, Slippage)
+
+[risiko]
+risiko_je_trade_pct = 1.0        # Verlust bis zum Stop inkl. Kommission, vom Kontostand
+max_tagesverlust_pct = 3.0       # Summe der Risiken aller heute eröffneten Day-Trades
+max_trades_pro_tag = 3
+max_positionen = 1               # gleichzeitig offene Day-Trader-Positionen
+min_crv = 1.0                    # Ziel mindestens so weit entfernt wie der Stop
+max_plan_alter_min = 30          # älterer Plan -> neu planen
+max_kursabweichung_r = 0.25      # Kurs seit dem Plan um mehr als 0,25 x Risiko gelaufen -> neu planen
+freigabe_gueltig_min = 10        # ein "ja" gilt so lange, danach neu fragen
+abweichung_points = 100          # erlaubte Kursabweichung bei der Marktorder
+
+# Opening Range: Hoch/Tief der ersten range_min Minuten ab start. Einstiege nur bis einstieg_bis,
+# alles glatt bis glattstellen.
+[sitzungen.XAUUSD]
+name = "COMEX-Eröffnung"
+zeitzone = "America/New_York"
+start = "08:20"
+range_min = 15
+einstieg_bis = "11:30"
+glattstellen = "16:30"
+
+[sitzungen.BTCUSD]
+name = "US-Börseneröffnung"
+zeitzone = "America/New_York"
+start = "09:30"
+range_min = 15
+einstieg_bis = "12:00"
+glattstellen = "16:00"
+
+# Beispiel für den DAX, falls dein Broker ihn anbietet (Symbolname beim Broker prüfen, z. B. GER40 oder DE40)
+# und er oben bei symbole steht:
+# [sitzungen.GER40]
+# name = "Xetra-Eröffnung"
+# zeitzone = "Europe/Berlin"
+# start = "09:00"
+# range_min = 15
+# einstieg_bis = "12:00"
+# glattstellen = "17:25"

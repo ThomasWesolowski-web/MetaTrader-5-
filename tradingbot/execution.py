@@ -1,6 +1,8 @@
 """Orderausführung auf dem DEMOKONTO (Phase 5, Freigabe des Nutzers vom 21.10.2026).
 
 Dies ist die EINZIGE Stelle im Programm, die Orders an MetaTrader 5 sendet (ein Test stellt das sicher).
+Neben dem Bot (DemoExecutor) nutzen auch die Day-Trader-Skills (tradingbot/daytrader) diese Stelle:
+send_manual_order / close_manual_position, mit eigener Magic-Nummer und denselben Demo-Prüfungen.
 
 Sicherheitsregeln (fest im Code, nicht über config.toml abschaltbar):
   * nur auf einem DEMOKONTO (account_info().trade_mode == 0) – geprüft beim Start UND vor jeder einzelnen Order;
@@ -26,6 +28,7 @@ from .backtest.account import RiskRules
 from .instruments import InstrumentSpec, round_volume_down
 
 MAGIC = 20261021                  # kennzeichnet Positionen dieses Programms
+MAGIC_DAYTRADER = 20261123        # Positionen der Day-Trader-Skills (vom Bot nicht angefasst)
 DEMO = 0                          # ACCOUNT_TRADE_MODE_DEMO
 RELEASE_FILE = "handel_freigeben.anfrage"
 OK_CODES = (10008, 10009)         # TRADE_RETCODE_PLACED, TRADE_RETCODE_DONE
@@ -33,6 +36,85 @@ OK_CODES = (10008, 10009)         # TRADE_RETCODE_PLACED, TRADE_RETCODE_DONE
 
 def _d(obj) -> dict:
     return {} if obj is None else (obj._asdict() if hasattr(obj, "_asdict") else dict(obj))
+
+
+def _filling_mode(mt5, symbol: str) -> int:
+    fm = int(getattr(mt5.symbol_info(symbol), "filling_mode", 0) or 0)
+    if fm & 1:
+        return mt5.ORDER_FILLING_FOK
+    if fm & 2:
+        return mt5.ORDER_FILLING_IOC
+    return mt5.ORDER_FILLING_RETURN
+
+
+def _demo_send(mt5, req: dict) -> tuple[bool, object, str]:
+    """order_check + order_send – nur, wenn in diesem Moment ein Demokonto eingeloggt ist."""
+    if _d(mt5.account_info()).get("trade_mode") != DEMO:                # vor JEDER Order erneut prüfen
+        return False, None, "kein Demokonto eingeloggt – es werden KEINE Orders gesendet"
+    chk = mt5.order_check(req)
+    if chk is None or getattr(chk, "retcode", -1) != 0:
+        return False, chk, f"Prüfung abgelehnt: {getattr(chk, 'retcode', None)} {getattr(chk, 'comment', '')} {mt5.last_error()}"
+    res = mt5.order_send(req)
+    if res is None or getattr(res, "retcode", -1) not in OK_CODES:
+        return False, res, f"Order abgelehnt: {getattr(res, 'retcode', None)} {getattr(res, 'comment', '')} {mt5.last_error()}"
+    return True, res, "ok"
+
+
+def _manual_ready(mt5) -> str | None:
+    if _d(mt5.account_info()).get("trade_mode") != DEMO:
+        return "kein Demokonto eingeloggt – es werden KEINE Orders gesendet"
+    if _d(mt5.terminal_info()).get("trade_allowed") is False:
+        return "Algo-Trading ist in MT5 ausgeschaltet (Schaltfläche 'Algo Trading')"
+    return None
+
+
+def send_manual_order(mt5, symbol: str, direction: int, volume: float, sl: float, tp: float | None, digits: int,
+                      deviation_points: int = 100, comment: str = "DT") -> dict:
+    """Marktorder einer Day-Trader-Freigabe (eine Order je Ja). Stop und Ziel werden mit der Order hinterlegt.
+    Volumen, Stop und Ziel kommen aus dem geprüften Ticket; hier wird nur noch einmal gegen den aktuellen Kurs
+    geprüft, dass Stop und Ziel auf der richtigen Seite liegen."""
+    why = _manual_ready(mt5)
+    if why:
+        return {"ok": False, "meldung": why}
+    if direction not in (1, -1) or not (volume > 0) or not (sl > 0):
+        return {"ok": False, "meldung": "Ticket unvollständig (Richtung, Volumen oder Stop fehlt)"}
+    tick = _d(mt5.symbol_info_tick(symbol))
+    if not tick.get("bid"):
+        return {"ok": False, "meldung": "kein aktueller Kurs"}
+    price = float(tick["ask"] if direction == 1 else tick["bid"])
+    if direction * (price - sl) <= 0:
+        return {"ok": False, "meldung": f"Kurs {price} liegt bereits jenseits des Stops {sl}"}
+    if tp and direction * (tp - price) <= 0:
+        return {"ok": False, "meldung": f"Kurs {price} liegt bereits jenseits des Ziels {tp}"}
+    req = {"action": mt5.TRADE_ACTION_DEAL, "symbol": symbol, "volume": float(volume),
+           "type": mt5.ORDER_TYPE_BUY if direction == 1 else mt5.ORDER_TYPE_SELL, "price": price,
+           "sl": round(float(sl), digits), "tp": round(float(tp), digits) if tp else 0.0,
+           "deviation": int(deviation_points), "magic": MAGIC_DAYTRADER, "comment": comment[:31],
+           "type_time": mt5.ORDER_TIME_GTC, "type_filling": _filling_mode(mt5, symbol)}
+    ok, res, msg = _demo_send(mt5, req)
+    return {"ok": ok, "meldung": msg, "anfrage": req, "ticket": int(getattr(res, "order", 0) or 0) if ok else None,
+            "kurs": float(getattr(res, "price", 0) or price) if ok else None}
+
+
+def close_manual_position(mt5, ticket: int, deviation_points: int = 100, comment: str = "DT exit") -> dict:
+    """Schließt eine Position der Day-Trader-Skills zum Marktpreis (nur Demokonto, nur eigene Magic-Nummer)."""
+    why = _manual_ready(mt5)
+    if why:
+        return {"ok": False, "meldung": why}
+    pos = next((p for p in (mt5.positions_get() or ()) if int(p.ticket) == int(ticket)), None)
+    if pos is None:
+        return {"ok": False, "meldung": f"Position {ticket} ist nicht offen"}
+    if getattr(pos, "magic", None) != MAGIC_DAYTRADER:
+        return {"ok": False, "meldung": f"Position {ticket} gehört nicht zu den Day-Trader-Skills – wird nicht angefasst"}
+    tick = _d(mt5.symbol_info_tick(pos.symbol))
+    buy = int(pos.type) == mt5.ORDER_TYPE_BUY
+    req = {"action": mt5.TRADE_ACTION_DEAL, "symbol": pos.symbol, "volume": float(pos.volume),
+           "type": mt5.ORDER_TYPE_SELL if buy else mt5.ORDER_TYPE_BUY, "position": int(pos.ticket),
+           "price": float(tick.get("bid") if buy else tick.get("ask")), "deviation": int(deviation_points),
+           "magic": MAGIC_DAYTRADER, "comment": comment[:31], "type_time": mt5.ORDER_TIME_GTC,
+           "type_filling": _filling_mode(mt5, pos.symbol)}
+    ok, res, msg = _demo_send(mt5, req)
+    return {"ok": ok, "meldung": msg, "kurs": float(getattr(res, "price", 0) or req["price"]) if ok else None}
 
 
 class DemoExecutor:
@@ -116,24 +198,13 @@ class DemoExecutor:
         return {int(p.ticket): p for p in (pos or ()) if getattr(p, "magic", None) == MAGIC}
 
     def _filling(self, symbol: str) -> int:
-        fm = int(getattr(self.mt5.symbol_info(symbol), "filling_mode", 0) or 0)
-        if fm & 1:
-            return self.mt5.ORDER_FILLING_FOK
-        if fm & 2:
-            return self.mt5.ORDER_FILLING_IOC
-        return self.mt5.ORDER_FILLING_RETURN
+        return _filling_mode(self.mt5, symbol)
 
     def _send(self, req: dict) -> tuple[bool, object, str]:
-        if self._account().get("trade_mode") != DEMO:                # vor JEDER Order erneut prüfen
-            self.active, self.reason = False, "kein Demokonto eingeloggt – es werden KEINE Orders gesendet"
-            return False, None, self.reason
-        chk = self.mt5.order_check(req)
-        if chk is None or getattr(chk, "retcode", -1) != 0:
-            return False, chk, f"Prüfung abgelehnt: {getattr(chk, 'retcode', None)} {getattr(chk, 'comment', '')} {self.mt5.last_error()}"
-        res = self.mt5.order_send(req)
-        if res is None or getattr(res, "retcode", -1) not in OK_CODES:
-            return False, res, f"Order abgelehnt: {getattr(res, 'retcode', None)} {getattr(res, 'comment', '')} {self.mt5.last_error()}"
-        return True, res, "ok"
+        ok, res, msg = _demo_send(self.mt5, req)
+        if not ok and msg.startswith("kein Demokonto"):
+            self.active, self.reason = False, msg
+        return ok, res, msg
 
     # ------------------------------------------------------------------ Einstieg
     def open(self, cand, signal_key: str, direction: int, stop: float, target: float, entry_bar_server: int,
