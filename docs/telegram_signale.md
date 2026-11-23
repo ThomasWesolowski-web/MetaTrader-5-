@@ -22,7 +22,7 @@ der Bot daraus lesen würde. `--kanaele` listet deine Kanäle, falls der Name in
 | Nachricht im Kanal | Aktion |
 |---|---|
 | `SIGNAL ALERT / XAUUSD / SELL / ENTRY AREA 3622-3626 / Target: 3560 / Stop loss: 3642` | Marktorder, sobald der Kurs in der Einstiegszone liegt (bis 120 Min.), Stop und Ziel beim Broker |
-| „taking partials“, „close half“ | 50 % der Position schließen (bei 0,02 Lot: 0,01) |
+| „taking partials“, „close half“ | 50 % der Position schließen (ab 0,02 Lot; bei 0,01 Lot nur protokolliert) |
 | „moving my SL to BE“, „SL to entry“, „breakeven“ | Stop auf den Einstiegskurs (nur wenn der Kurs im Gewinn ist) |
 | „move SL to 3610“ | Stop dorthin, aber nur enger, nie weiter weg |
 | „closing now“, „exit“ | alles schließen |
@@ -38,9 +38,9 @@ oder mit Stop auf der falschen Seite werden nicht gehandelt.
 Fest im Code (in `telegram.toml` nur kleiner einstellbar):
 
 * Konto: Demokonto oder genau das Live-Konto aus `live_konto` – vor **jeder** Order geprüft (tradingbot/execution.py).
-  Live nur mit fester Lotgröße (höchstens 0,05; eingestellt 0,02).
-* Verlust bis zum Stop höchstens 10 % des Kontostands, sonst kein Trade.
-* Tagesverlust 20 % (realisiert + offenes Risiko) → bis morgen keine neuen Signale.
+  Live nur mit fester Lotgröße (höchstens 0,05; eingestellt 0,01).
+* Verlust bis zum Stop höchstens 25 % des Kontostands, sonst kein Trade.
+* Tagesverlust 25 % (realisiert + offenes Risiko) → bis morgen keine neuen Signale.
 * Drawdown 40 % vom Höchststand → Stopp, weiter erst mit `python telegram_signale.py --handel-freigeben`.
 * Höchstens 2 offene Telegram-Positionen, 4 Signale pro Tag, Chance/Risiko mindestens 1.
 * Eigene Magic-Nummer 20261124: Positionen des Bots und der Day-Trader-Skills werden nicht angefasst.

@@ -169,8 +169,8 @@ def test_signal_opens_sell_with_stop_and_target(tmp_path):
     (req,) = mt5.sent
     assert req["type"] == mt5.ORDER_TYPE_SELL and req["sl"] == 3642 and req["tp"] == 3560
     assert req["magic"] == MAGIC_TELEGRAM and req["comment"] == "TG 1"
-    # 10 % von 1000 = 100 $ Risiko, 17 $ bis zum Stop je 0,01 Lot -> 0,05 Lot
-    assert req["volume"] == pytest.approx(0.05)
+    # 25 % von 1000 = 250 $ Risiko, 17 $ bis zum Stop je 0,01 Lot -> 0,14 Lot
+    assert req["volume"] == pytest.approx(0.14)
     assert tr.on_message(1, FX_CULTURE, T0, now=T0) == "schon verarbeitet"
     assert len(mt5.sent) == 1
 
@@ -273,7 +273,7 @@ def test_limits_positions_and_daily_loss_and_drawdown(tmp_path):
     tr.on_message(1, FX_CULTURE, T0, now=T0)
     assert tr.on_message(2, FX_CULTURE, T0, now=T0) == "verworfen"            # schon 1 Position offen
     mt5.positions.clear()
-    mt5.balance = mt5.equity = 790.0                                          # -21 % heute
+    mt5.balance = mt5.equity = 740.0                                          # -26 % heute
     tr.tick(T0 + pd.Timedelta(minutes=1))
     assert tr.on_message(3, FX_CULTURE, T0, now=T0 + pd.Timedelta(minutes=1)) == "verworfen"
     assert tr.st["konto"]["gesperrt"]
@@ -284,8 +284,14 @@ def test_limits_positions_and_daily_loss_and_drawdown(tmp_path):
     assert tr.on_message(4, FX_CULTURE, nxt, now=nxt) == "verworfen"
 
 
+def test_fixed_minimum_lot_on_small_account(tmp_path):
+    tr, mt5 = make(tmp_path, FakeMT5(balance=90.73), lot=0.01)                # 17 $ = 19 % <= 25 %
+    assert tr.on_message(1, FX_CULTURE, T0, now=T0) == "offen"
+    assert tr.on_message(2, FX_CULTURE, T0, now=T0) == "verworfen"            # Tagesrisiko 2 x 19 % > 25 %
+
+
 def test_fixed_lot_too_risky_for_small_account(tmp_path):
-    tr, mt5 = make(tmp_path, FakeMT5(balance=100.0), lot=0.02)                # 0,02 Lot = 34 $ > 10 $
+    tr, mt5 = make(tmp_path, FakeMT5(balance=100.0), lot=0.02)                # 0,02 Lot = 34 $ > 25 $
     assert tr.on_message(1, FX_CULTURE, T0, now=T0) == "verworfen"
     assert "riskieren" in tr.st["signale"]["1"]["grund"]
 
@@ -324,7 +330,7 @@ def test_config_caps_and_live_requirements(tmp_path):
     p = tmp_path / "t.toml"
     p.write_text('[handel]\nrisiko_je_trade_pct = 50\nmax_positionen = 9\nlot = 0.02\n', encoding="utf-8")
     c = load(p)
-    assert c.risk_pct == 10.0 and c.max_positions == 2 and c.live_login is None
+    assert c.risk_pct == 25.0 and c.max_positions == 2 and c.live_login is None
     p.write_text('[telegram]\nkonto = "live"\nlive_konto = 0\n[handel]\nlot = 0.02\n', encoding="utf-8")
     with pytest.raises(ValueError, match="live_konto"):
         load(p)

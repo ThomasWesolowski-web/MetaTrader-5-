@@ -6,9 +6,10 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Obergrenzen, fest im Code (Freigabe 23.11.2026: 10 % je Signal, nur Demokonto). telegram.toml kann nur darunter gehen.
-CAP_RISK_PCT = 10.0
-CAP_DAILY_LOSS_PCT = 20.0
+# Obergrenzen, fest im Code (Freigabe 23.11.2026: Live-Konto mit 0,01 Lot, bis 25 % je Signal).
+# telegram.toml kann nur darunter gehen.
+CAP_RISK_PCT = 25.0
+CAP_DAILY_LOSS_PCT = 25.0
 CAP_DRAWDOWN_PCT = 40.0
 CAP_POSITIONS = 2
 CAP_LIVE_LOT = 0.05          # Live-Konto: feste Lotgröße höchstens so groß (Freigabe 23.11.2026: 0,01 Lot)
@@ -26,8 +27,8 @@ class TelegramConfig:
     symbol_map: dict = field(default_factory=dict)      # Name im Kanal -> Name beim Broker
     symbol_suffix: str = ""
     allowed: list = field(default_factory=list)         # leer = alle Symbole, die der Broker anbietet
-    risk_pct: float = 10.0
-    max_daily_loss_pct: float = 20.0
+    risk_pct: float = 25.0
+    max_daily_loss_pct: float = 25.0
     max_drawdown_pct: float = 40.0
     max_positions: int = 2
     max_signals_per_day: int = 4
