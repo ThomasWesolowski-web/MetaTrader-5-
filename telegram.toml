@@ -1,0 +1,36 @@
+# Telegram-Signale automatisch handeln (Beschreibung: docs/telegram_signale.md)
+# Liest den Kanal mit deinem eigenen Telegram-Account mit und handelt "SIGNAL ALERT"-Nachrichten in MT5.
+# Eigene Magic-Nummer 20261124; der übrige Bot und die Day-Trader-Skills bleiben unberührt und nur auf Demo.
+
+[telegram]
+kanal = "FX Culture | Premium FX"    # Name des Kanals wie in Telegram, @benutzername oder Nummer (--kanaele zeigt sie)
+zugang = "telegram_zugang.toml"      # api_id und api_hash von my.telegram.org (Datei liegt nur auf deinem PC)
+orders = true                        # false = nur mitlesen und protokollieren, keine Orders
+
+# Konto: "demo" oder "live". Live handelt NUR auf dem Konto mit der Nummer bei live_konto und nur mit fester
+# Lotgröße (höchstens 0,05). Ist ein anderes Konto eingeloggt, wird nichts gesendet.
+konto = "live"
+live_konto = 0                       # <- deine Vantage-Live-Kontonummer eintragen, z. B. 12345678
+
+[symbole]
+suffix = ""                          # falls der Broker Endungen nutzt, z. B. "+" oder ".r" (XAUUSD -> XAUUSD+)
+erlaubt = []                         # leer = alle Symbole, sonst z. B. ["XAUUSD", "EURUSD"]
+# namen = { XAUUSD = "XAUUSD.sd" }   # einzelne Namen abweichend zuordnen
+
+[handel]
+lot = 0.02                   # feste Lotgröße je Signal (0 = aus dem Risiko berechnen, nur Demo); bei "partials"
+                             # wird die Hälfte (0,01) geschlossen, der Rest läuft mit Stop auf Einstieg weiter
+risiko_je_trade_pct = 10.0   # höchstens so viel Verlust bis zum Stop (vom Kontostand), sonst kein Trade (max. 10)
+max_tagesverlust_pct = 20.0  # realisiert + offenes Risiko; danach bis morgen keine neuen Signale (max. 20)
+max_drawdown_pct = 40.0      # vom Höchststand; danach Stopp bis --handel-freigeben (max. 40)
+max_positionen = 2           # gleichzeitig offene Telegram-Positionen (max. 2)
+max_signale_pro_tag = 4
+min_crv = 1.0                # Ziel mindestens so weit entfernt wie der Stop (zum tatsächlichen Kurs)
+einstieg_warten_min = 120    # so lange auf die Einstiegszone warten, dann verfällt das Signal
+toleranz_r = 0.2             # Kurs darf so weit (x Abstand Zone-Stop) außerhalb der Zone liegen
+ziel = "erstes"              # bei mehreren Zielen: "erstes" oder "letztes" als Ziel beim Broker
+folgenachrichten = "alle"    # "alle" (Teilgewinn, Stop auf Einstieg, schließen), "nur_be_und_schliessen", "aus"
+teilgewinn_pct = 50          # Anteil, der bei "taking partials" geschlossen wird
+folge_gueltig_h = 24         # Folgenachrichten wirken auf Signale der letzten 24 Stunden
+max_signal_alter_s = 180     # ältere Signale (z. B. nach einem Neustart) werden nicht mehr gehandelt
+abweichung_points = 100      # erlaubte Kursabweichung bei der Marktorder

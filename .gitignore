@@ -8,3 +8,6 @@ data/
 .pytest_cache/
 tmp/
 config.toml.bak
+telegram_zugang.toml
+*.session
+*.session-journal
