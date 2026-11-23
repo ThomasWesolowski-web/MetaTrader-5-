@@ -12,6 +12,7 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 | 3 | Strategiebibliothek, Backtests, Walk-Forward, Strategieauswahl | ✅ abgeschlossen – 120/120 Testeinheiten, keine Strategie geeignet ([Ergebnis](docs/phase3_ergebnis.md)) |
 | 4 | Streamlit-Dashboard, Beobachtung (Paper-Trading) der BTC-Trendfolge-Kandidaten, Kontrakt-/Mindestlotprüfung | 🔄 Punkte 1 und 2 umgesetzt – [Arbeitsplan](docs/phase4_arbeitsplan.md), [Ergebnis](docs/phase4_ergebnis.md); Ergänzung 20.10.: Strategien EMA 20 + Wochen-VWAP und Opening Range Breakout, Risiko 1 % / Tagesverlust 3 % / Drawdown 20 % ([Details](docs/phase4_ergaenzung_strategien.md)); Punkt 4 sonst zurückgestellt |
 | 5 | Demo-Handel: Orders für die Signale, nur Demokonto, 1,5 % Risiko, Stopp bei 20 % Drawdown | 🔄 umgesetzt – [Beschreibung](docs/phase5_demohandel.md) |
+| + | Day-Trader-Skills für Claude: Scanner, Plan, Zeitmaschine, Risikoprüfung, Order mit Ja-Freigabe (nur Demo) | 🔄 umgesetzt – [Beschreibung](docs/daytrader_skills.md) |
 
 ## Phase 4: Dashboard und Beobachtung (keine Orders)
 

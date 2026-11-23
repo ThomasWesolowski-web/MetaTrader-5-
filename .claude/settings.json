@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python daytrader.py scannen*)",
+      "Bash(python daytrader.py planen*)",
+      "Bash(python daytrader.py zeitmaschine*)",
+      "Bash(python daytrader.py ticket*)",
+      "Bash(python daytrader.py status*)",
+      "Bash(python daytrader.py --json*)",
+      "Bash(.venv/Scripts/python.exe daytrader.py scannen*)",
+      "Bash(.venv/Scripts/python.exe daytrader.py planen*)",
+      "Bash(.venv/Scripts/python.exe daytrader.py zeitmaschine*)",
+      "Bash(.venv/Scripts/python.exe daytrader.py ticket*)",
+      "Bash(.venv/Scripts/python.exe daytrader.py status*)"
+    ],
+    "ask": [
+      "Bash(python daytrader.py freigeben*)",
+      "Bash(python daytrader.py senden*)",
+      "Bash(python daytrader.py schliessen*)",
+      "Bash(.venv/Scripts/python.exe daytrader.py freigeben*)",
+      "Bash(.venv/Scripts/python.exe daytrader.py senden*)",
+      "Bash(.venv/Scripts/python.exe daytrader.py schliessen*)",
+      "Bash(*daytrader.py*senden*)",
+      "Bash(*daytrader.py*schliessen*)"
+    ]
+  }
+}
