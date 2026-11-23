@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
 import sys
 from pathlib import Path
 
@@ -76,7 +77,8 @@ async def list_channels(tcfg) -> int:
     return 0
 
 
-async def history(tcfg, n: int) -> int:
+async def history(tcfg, n: int, out_path: str | None = None, full: bool = False) -> int:
+    lines = []
     async with _client(tcfg) as client:
         ch = await find_channel(client, tcfg.channel)
         msgs = [m async for m in client.iter_messages(ch, limit=n)]
@@ -84,8 +86,16 @@ async def history(tcfg, n: int) -> int:
             text = (m.message or "").strip()
             if not text:
                 continue
-            first = text.splitlines()[0][:70] if text else ""
-            print(f"{m.date:%d.%m. %H:%M}  #{m.id}  {first}\n                → {describe(text)}")
+            res = describe(text)
+            lines.append(f"{m.date:%d.%m. %H:%M}  #{m.id}  {text.splitlines()[0][:70]}")
+            if full or (res == "keine Handelsnachricht" and re.search(r"\b(?:BUY|SELL|TRADE|SIGNAL|LONG|SHORT)\b",
+                                                                      text.upper())):
+                lines += ["      | " + ln for ln in text.splitlines() if ln.strip()]
+            lines.append(f"                → {res}")
+    print("\n".join(lines))
+    if out_path:
+        Path(out_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"\nGespeichert in {out_path}")
     return 0
 
 
@@ -128,6 +138,8 @@ def main(argv=None) -> int:
     ap.add_argument("--config", default=str(ROOT / "telegram.toml"))
     ap.add_argument("--kanaele", action="store_true", help="Kanäle und Gruppen deines Telegram-Accounts anzeigen")
     ap.add_argument("--verlauf", type=int, metavar="N", help="letzte N Nachrichten des Kanals prüfen, ohne zu handeln")
+    ap.add_argument("--ausgabe", metavar="DATEI", help="mit --verlauf: Ergebnis zusätzlich in diese Datei schreiben")
+    ap.add_argument("--voll", action="store_true", help="mit --verlauf: alle Nachrichten mit vollem Text zeigen")
     ap.add_argument("--pruefen", metavar="TEXT", help="einen Nachrichtentext prüfen (ohne Telegram und MT5)")
     ap.add_argument("--status", action="store_true", help="gespeicherten Stand anzeigen")
     ap.add_argument("--handel-freigeben", action="store_true", help="nach einem Drawdown-Stopp wieder handeln")
@@ -149,7 +161,7 @@ def main(argv=None) -> int:
     if args.kanaele:
         return asyncio.run(list_channels(tcfg))
     if args.verlauf:
-        return asyncio.run(history(tcfg, args.verlauf))
+        return asyncio.run(history(tcfg, args.verlauf, args.ausgabe, args.voll))
 
     from beobachtung_ausfuehren import single_instance
     lock = single_instance(store.dir / "telegram.lock")

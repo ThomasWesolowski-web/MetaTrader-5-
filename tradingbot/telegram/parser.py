@@ -103,18 +103,38 @@ _SL = r"\b(?:sl|s/l|stop\s*-?\s*loss|stop|stops)\b"
 _BE = r"(?:\bbe\b|\bb\.e\.?|break\s*-?\s*even|\bentry\b|\bentry\s+price\b|\bopen(?:ing)?\s+price\b)"
 
 
+MAX_FOLLOWUP_LEN = 300          # längere Texte sind Werbung, Wochenrückblicke usw. – nie als Handelsanweisung lesen
+_PROMO = re.compile(r"t\.me/|@\w{3,}|message\s+me|best\s+trader|promotion|referr?al|bonus|deal\s+for|giveaway|"
+                    r"premium\s+members?|join\s+(?:now|here)|link\s+in\s+bio|dm\s+me")
+
+
 def parse_followup(text: str) -> list[tuple[str, float | None]]:
-    """Liste der Aktionen in einer Folgenachricht, in sinnvoller Reihenfolge (Teilgewinn vor Stopänderung)."""
-    t = text.lower().replace("’", "'")
+    """Liste der Aktionen in einer Folgenachricht, in sinnvoller Reihenfolge (Teilgewinn vor Stopänderung).
+    Teilgewinn hat als Wert den genannten Prozentsatz ("closing out 80%" -> 80) oder None (= Standard)."""
+    t = text.lower().replace("’", "'").strip()
+    if not t or len(t) > MAX_FOLLOWUP_LEN or _PROMO.search(t):
+        return []
     acts: list[tuple[str, float | None]] = []
     if re.search(r"\b(cancel(?:l?ed)?|invalidated?|delete[ds]?|void|don'?t\s+(?:enter|take)|no\s+entry|"
                  r"not\s+(?:entering|valid))\b", t):
         return [(CANCEL, None)]
-    partial = bool(re.search(r"\bpartials?\b|\bpartially\b|\bclos(?:e|ing|ed)\s+(?:half|50\s*%|some)|"
-                             r"\b(?:secur|book|tak|lock)(?:e|ed|ing)?\s+(?:some|half|partial)", t))
-    if partial:
+    full_close = False
+    partial = False
+    m = re.search(r"\b(?:clos(?:e|ing|ed)(?:\s+out)?|secur(?:e|ed|ing)|tak(?:e|ing)|bank(?:ed|ing)?|book(?:ed|ing)?|"
+                  r"lock(?:ed|ing)?)\b[^.\n!?%+\-]{0,20}?(\d{1,3})\s*%", t)
+    if m:
+        pct = float(m.group(1))
+        if pct >= 100:
+            full_close = True
+        elif pct > 0:
+            acts.append((PARTIAL, pct))
+            partial = True
+    elif re.search(r"\bpartials?\b|\bpartially\b|\bclos(?:e|ing|ed)\s+(?:out\s+)?(?:half|some)\b|"
+                   r"\b(?:secur|book|tak|lock|bank)(?:e|ed|ing)?\s+(?:some|half|partial)", t):
         acts.append((PARTIAL, None))
-    be = (re.search(_SL + r"[^.\n!?]{0,25}?" + _BE, t) or re.search(r"\bbreak\s*-?\s*even\b|\brisk\s*-?\s*free\b", t))
+        partial = True
+    be = (re.search(_SL + r"[^.\n!?]{0,25}?" + _BE, t)
+          or re.search(r"\bbreak\s*-?\s*even\b|\brisk\s*-?\s*free\b|\bremov(?:e|ed|ing)\s+(?:all\s+|the\s+)?risk\b", t))
     if be:
         acts.append((BREAKEVEN, None))
     else:
@@ -122,9 +142,11 @@ def parse_followup(text: str) -> list[tuple[str, float | None]]:
                       + _SL + r"[^.\n!?\d]{0,15}?" + NUM, t)
         if m:
             acts.append((NEW_STOP, _num(m.group(1))))
-    if not partial and re.search(r"\b(?:clos(?:e|ing|ed)|exit(?:ing|ed)?|get\s+out)\b"
-                                 r"(?!\s+(?:to|above|below|under|over|near|the\s+gap|in\s+on))", t) \
-            and not re.search(r"\b(?:tp|target)s?\s*\d?\s*(?:hit|reached|smashed|done)\b|\bsl\s+hit\b|\bstopped\s+out\b", t):
+    if full_close or (not partial and re.search(
+            r"\b(?:clos(?:e|ing|ed)|exit(?:ing|ed)?|get\s+out)\b"
+            r"(?!\s+(?:to|above|below|under|over|near|the\s+gap|in\s+on))", t)
+            and not re.search(r"\b(?:tp|target)s?\s*\d?\s*(?:hit|reached|smashed|done)\b|\bsl\s+hit\b|"
+                              r"\bstopped\s+out\b", t)):
         acts.append((CLOSE, None))
     if not acts and re.search(r"\b(?:tp|target)s?\s*\d?\s*(?:hit|reached|smashed|done)\b|\bsl\s+hit\b|"
                               r"\bstopped\s+out\b|\bpips?\b", t):

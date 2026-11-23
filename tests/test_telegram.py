@@ -70,6 +70,13 @@ def test_rejects_non_signals(text):
     ("Cancel this signal, don't enter", [(CANCEL, None)]),
     ("TP hit ✅ closed in profit", [(INFO, None)]),
     ("Fast profits 🚀", []),
+    ("Closing out 80% +400✅", [(PARTIAL, 80.0)]),
+    ("Let’s secure atleast 70% here", [(PARTIAL, 70.0)]),
+    ("Removing risk here", [(BREAKEVEN, None)]),
+    ("Removing risk on this trade and closing out  -60 pips.", [(BREAKEVEN, None), (CLOSE, None)]),
+    ("Closing full +180 ✅✅", [(CLOSE, None)]),
+    ("Send me your profits 👉@fxculture", []),
+    ("🔥 BEST TRADER OF THE WEEK — MARK WILKES 🏆 He closed the week with +400 pips", []),
     ("If price closes above 3650 we could see more upside", []),
     ("It will be a busy week", []),
 ])

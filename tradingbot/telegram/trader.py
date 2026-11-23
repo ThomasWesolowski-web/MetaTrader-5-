@@ -375,7 +375,8 @@ class SignalTrader:
                                         magic=MAGIC_TELEGRAM, live_login=self.cfg.live_login)
             return done(f"geschlossen @ {res['kurs']}" if res["ok"] else f"Schließen fehlgeschlagen: {res['meldung']}")
         if act == P.PARTIAL:
-            vol = self._floor_volume(info, float(pos.volume) * self.cfg.partial_pct / 100)
+            pct = float(val) if val else self.cfg.partial_pct
+            vol = self._floor_volume(info, float(pos.volume) * pct / 100)
             rest = round(float(pos.volume) - vol, 8)
             if vol <= 0 or rest < float(info.get("volume_min") or 0.01) - 1e-12:
                 return done(f"Position mit {pos.volume:g} Lot ist zu klein zum Teilen – läuft voll weiter")
