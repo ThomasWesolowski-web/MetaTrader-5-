@@ -94,6 +94,7 @@ Tick = namedtuple("Tick", "bid ask")
 Pos = namedtuple("Pos", "ticket symbol type volume price_open sl tp magic comment")
 Res = namedtuple("Res", "retcode order price comment")
 Deal = namedtuple("Deal", "entry profit commission swap")
+Cash = namedtuple("Cash", "ticket type profit")
 
 
 class FakeMT5:
@@ -130,7 +131,9 @@ class FakeMT5:
     def positions_get(self, symbol=None):
         return tuple(self.positions.values())
 
-    def history_deals_get(self, position=None, **kw):
+    def history_deals_get(self, *a, position=None, **kw):
+        if a:                                                   # Zeitraum -> Kontobuchungen
+            return tuple(getattr(self, "cash", ()))
         return tuple(self.deals.get(position, ()))
 
     def last_error(self):
@@ -395,3 +398,27 @@ def test_deposit_raises_daily_base(tmp_path):
     tr.tick(T0 + pd.Timedelta(minutes=1))
     nxt = T0 + pd.Timedelta(minutes=2)
     assert tr.on_message(1, FX_CULTURE, nxt, now=nxt) == "offen"             # 17 $ < 25 % von 307 $
+
+
+def test_deposit_shifts_drawdown_peak_and_lifts_stop(tmp_path):
+    tr, mt5 = make(tmp_path, FakeMT5(balance=100.91), lot=0.01)
+    mt5.balance = mt5.equity = 57.97                                          # -42 % -> Stopp
+    tr.tick(T0 + pd.Timedelta(hours=1))
+    assert tr.st["konto"]["gestoppt"]
+    mt5.cash = [Cash(9001, 2, 250.0)]                                         # Einzahlung 250 $
+    mt5.balance = mt5.equity = 307.97
+    tr.tick(T0 + pd.Timedelta(hours=2))
+    k = tr.st["konto"]
+    assert not k["gestoppt"] and k["hoechststand"] == pytest.approx(350.91)
+    tr.tick(T0 + pd.Timedelta(hours=3))                                       # nicht doppelt anrechnen
+    assert tr.st["konto"]["hoechststand"] == pytest.approx(350.91)
+    nxt = T0 + pd.Timedelta(hours=3, minutes=1)
+    assert tr.on_message(1, FX_CULTURE, nxt, now=nxt) == "offen"
+
+
+def test_withdrawal_does_not_trigger_stop(tmp_path):
+    tr, mt5 = make(tmp_path, FakeMT5(balance=300.0), lot=0.01)
+    mt5.cash = [Cash(9002, 2, -200.0)]
+    mt5.balance = mt5.equity = 100.0
+    tr.tick(T0 + pd.Timedelta(hours=1))
+    assert not tr.st["konto"]["gestoppt"] and tr.st["konto"]["hoechststand"] == pytest.approx(100.0)

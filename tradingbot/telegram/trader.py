@@ -126,8 +126,13 @@ class SignalTrader:
         if not acc:
             return
         day = str(_ts(now).date())
+        flow = self._cash_flows(now)
         if k["tag"] != day:
             k.update(tag=day, tag_start=float(acc["balance"]), gesperrt=False)
+        elif flow and k["tag_start"]:
+            k["tag_start"] = max(float(k["tag_start"]) + flow, 0.0)
+            if k["gesperrt"] and k["tag_start"] - float(acc["balance"]) < self.cfg.max_daily_loss_pct / 100 * k["tag_start"]:
+                k["gesperrt"] = False
         if float(acc["balance"]) > (k["tag_start"] or 0):           # Einzahlung oder Gewinn: Tagesbasis anheben
             k["tag_start"] = float(acc["balance"])
         start = k["tag_start"] or float(acc["balance"])
@@ -136,6 +141,18 @@ class SignalTrader:
             self.event("tageslimit_erreicht", now, verlust=round(start - float(acc["balance"]), 2))
             self._say(f"Tagesverlustgrenze {self.cfg.max_daily_loss_pct:g} % erreicht – heute keine neuen Signale")
         eq = float(acc.get("equity") or acc["balance"])
+        if flow and k["hoechststand"]:
+            # Ein-/Auszahlung: Höchststand um denselben Betrag verschieben, der Drawdown misst nur Handelsergebnisse
+            k["hoechststand"] = max(float(k["hoechststand"]) + flow, 0.0)
+            self.event("einzahlung" if flow > 0 else "auszahlung", now, betrag=round(flow, 2),
+                       hoechststand_neu=round(k["hoechststand"], 2))
+            self._say(f"{'Einzahlung' if flow > 0 else 'Auszahlung'} {flow:+.2f} erkannt – Höchststand für den "
+                      f"Drawdown jetzt {k['hoechststand']:.2f}")
+            if k["gestoppt"] and k["hoechststand"] > 0 and \
+                    (k["hoechststand"] - eq) / k["hoechststand"] < self.cfg.max_drawdown_pct / 100:
+                k.update(gestoppt=False, grund=None)
+                self.event("handel_freigegeben", now, grund="Einzahlung", kontostand=eq)
+                self._say("Handel wieder frei: nach der Einzahlung liegt der Drawdown unter der Grenze")
         peak = max(k["hoechststand"] or eq, eq)
         k["hoechststand"] = peak
         dd = (peak - eq) / peak if peak > 0 else 0.0
@@ -143,6 +160,33 @@ class SignalTrader:
             k.update(gestoppt=True, grund=f"Drawdown {100 * dd:.1f} % >= {self.cfg.max_drawdown_pct:g} %")
             self.event("handel_gestoppt", now, grund=k["grund"], hoechststand=round(peak, 2), kontostand=round(eq, 2))
             self._say(f"HANDEL GESTOPPT: {k['grund']}. Weiter nur mit: python telegram_signale.py --handel-freigeben")
+
+    def _cash_flows(self, now) -> float:
+        """Summe neuer Ein-/Auszahlungen (MT5-Deals vom Typ BALANCE = 2) seit der letzten Prüfung. Beim allerersten
+        Aufruf werden vorhandene Buchungen nur gemerkt, nicht angerechnet."""
+        k = self.st["konto"]
+        now = _ts(now)
+        first = not k.get("kasse_seit")
+        since = _ts(k["kasse_seit"]) if not first else now - pd.Timedelta(days=30)
+        try:
+            deals = self.mt5.history_deals_get(since.tz_localize(None).to_pydatetime(),
+                                               (now + pd.Timedelta(days=1)).tz_localize(None).to_pydatetime()) or ()
+        except Exception:                                             # noqa: BLE001 – ohne Historie keine Anpassung
+            return 0.0
+        seen = set(k.get("kasse_tickets") or [])
+        total = 0.0
+        for dl in deals:
+            if int(getattr(dl, "type", -1)) != 2:
+                continue
+            t = int(getattr(dl, "ticket", 0))
+            if t in seen:
+                continue
+            seen.add(t)
+            if not first:
+                total += float(getattr(dl, "profit", 0) or 0)
+        k["kasse_tickets"] = sorted(seen)[-500:]
+        k["kasse_seit"] = (now - pd.Timedelta(days=2)).isoformat()   # Überlappung, doppelte über die Ticketnummer
+        return total
 
     # ------------------------------------------------------------------ Nachrichten
     def on_message(self, msg_id: int, text: str, date_utc, reply_to: int | None = None, now=None) -> str:
