@@ -105,9 +105,32 @@ async def run(tcfg, mt5_module) -> int:
     trader = SignalTrader(mt5_module, tcfg, store)
     stop_file = store.dir / STOP_FILE
     stop_file.unlink(missing_ok=True)
+    outbox: list[str] = []
+
+    def log(text: str) -> None:
+        print(f"{pd.Timestamp.now():%H:%M:%S}  {text}")
+        if tcfg.notify:
+            outbox.append(text.strip())
+
+    async def flush(client) -> None:
+        if not outbox:
+            return
+        text = "🤖 Trading-Bot\n" + "\n".join(outbox)
+        outbox.clear()
+        try:
+            await client.send_message("me", text[:4000])      # "Gespeicherte Nachrichten" in deinem Telegram
+        except Exception as e:                                 # noqa: BLE001 – Handel läuft weiter
+            print(f"Benachrichtigung fehlgeschlagen: {e!r}")
+
+    trader.log = log
     async with _client(tcfg) as client:
         ch = await find_channel(client, tcfg.channel)
         print(f"Kanal: {getattr(ch, 'title', ch)} – warte auf Signale (Strg+C beendet)")
+        if tcfg.notify:
+            acc = mt5_module.account_info()
+            outbox.append(f"gestartet – Kanal {getattr(ch, 'title', ch)}, Konto {getattr(acc, 'login', '?')}, "
+                          f"Kontostand {getattr(acc, 'balance', '?')} {getattr(acc, 'currency', '')}")
+            await flush(client)
 
         @client.on(events.NewMessage(chats=ch))
         async def on_new(ev):
@@ -119,17 +142,20 @@ async def run(tcfg, mt5_module) -> int:
                     print(f"{pd.Timestamp.now():%H:%M:%S}  #{m.id}: {res}")
             except Exception as e:                                  # noqa: BLE001 – weiterlaufen, protokollieren
                 store.event("fehler", pd.Timestamp.now(tz="UTC"), nachricht=m.id, fehler=repr(e))
-                print(f"FEHLER bei Nachricht #{m.id}: {e!r}")
+                log(f"FEHLER bei Nachricht #{m.id}: {e!r}")
+            await flush(client)
 
         while not stop_file.exists():
             try:
                 trader.tick()
             except Exception as e:                                  # noqa: BLE001
                 store.event("fehler", pd.Timestamp.now(tz="UTC"), fehler=repr(e))
-                print(f"FEHLER im Durchlauf: {e!r}")
+                log(f"FEHLER im Durchlauf: {e!r}")
+            await flush(client)
             await asyncio.sleep(TICK_S)
         stop_file.unlink(missing_ok=True)
-        print("Beendet (Stopp-Anforderung).")
+        log("beendet (Stopp-Anforderung)")
+        await flush(client)
     return 0
 
 

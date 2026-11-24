@@ -6,6 +6,7 @@
 kanal = "FX Culture | Premium FX"    # Name des Kanals wie in Telegram, @benutzername oder Nummer (--kanaele zeigt sie)
 zugang = "telegram_zugang.toml"      # api_id und api_hash von my.telegram.org (Datei liegt nur auf deinem PC)
 orders = true                        # false = nur mitlesen und protokollieren, keine Orders
+benachrichtigen = true               # jede Order/Änderung als Nachricht in deine "Gespeicherten Nachrichten"
 
 # Konto: "demo" oder "live". Live handelt NUR auf dem Konto mit der Nummer bei live_konto und nur mit fester
 # Lotgröße (höchstens 0,05). Ist ein anderes Konto eingeloggt, wird nichts gesendet.

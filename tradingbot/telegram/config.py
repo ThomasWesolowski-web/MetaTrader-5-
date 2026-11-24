@@ -21,6 +21,7 @@ class TelegramConfig:
     channel: str = "FX Culture | Premium FX"
     credentials_file: str = "telegram_zugang.toml"
     orders_enabled: bool = True
+    notify: bool = True                                  # Meldungen in die "Gespeicherten Nachrichten" schicken
     account: str = "demo"                                # "demo" oder "live"
     live_account: int = 0                                # Kontonummer des Live-Kontos (vom Nutzer eingetragen)
     lot: float = 0.0                                     # feste Lotgröße je Signal; 0 = aus dem Risiko berechnen
@@ -82,6 +83,7 @@ def load(path: str | Path, data_root: str = "data") -> TelegramConfig:
     c.channel = str(tg.get("kanal", c.channel))
     c.credentials_file = str(tg.get("zugang", c.credentials_file))
     c.orders_enabled = bool(tg.get("orders", c.orders_enabled))
+    c.notify = bool(tg.get("benachrichtigen", c.notify))
     c.account = str(tg.get("konto", c.account)).lower()
     c.live_account = int(tg.get("live_konto", 0) or 0)
     c.symbol_suffix = str(sy.get("suffix", ""))
