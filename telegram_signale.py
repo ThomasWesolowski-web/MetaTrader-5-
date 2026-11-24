@@ -130,6 +130,10 @@ async def run(tcfg, mt5_module) -> int:
             acc = mt5_module.account_info()
             outbox.append(f"gestartet – Kanal {getattr(ch, 'title', ch)}, Konto {getattr(acc, 'login', '?')}, "
                           f"Kontostand {getattr(acc, 'balance', '?')} {getattr(acc, 'currency', '')}")
+            k = trader.st["konto"]
+            if k.get("gestoppt"):
+                outbox.append(f"⚠️ HANDEL GESTOPPT ({k.get('grund')}) – es werden KEINE Signale gehandelt. "
+                              f"Freigeben: .venv\\Scripts\\python.exe telegram_signale.py --handel-freigeben")
             await flush(client)
 
         @client.on(events.NewMessage(chats=ch))
