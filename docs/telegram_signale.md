@@ -22,12 +22,13 @@ der Bot daraus lesen würde. `--kanaele` listet deine Kanäle, falls der Name in
 | Nachricht im Kanal | Aktion |
 |---|---|
 | `SIGNAL ALERT / XAUUSD / SELL / ENTRY AREA 3622-3626 / Target: 3560 / Stop loss: 3642` | Marktorder, sobald der Kurs in der Einstiegszone liegt (bis 120 Min.), Stop und Ziel beim Broker |
-| „taking partials“, „close half“ | 50 % der Position schließen (ab 0,02 Lot; bei 0,01 Lot nur protokolliert) |
-| „moving my SL to BE“, „SL to entry“, „breakeven“ | Stop auf den Einstiegskurs (nur wenn der Kurs im Gewinn ist) |
+| `BUY TRADE XAU/USD / 4054.0-4050 / Stop Loss: 4033 / Target: open` | wie oben, aber ohne Ziel beim Broker – Ausstieg über die Folgenachrichten oder den Stop |
+| „taking partials“, „secure some profits“, „closing out 80%“ | Teil schließen (genannter Anteil, sonst 50 %); 0,01 Lot ist nicht teilbar → ab 50 % ganz schließen |
+| „moving my SL to BE“, „removing risk“, „breakeven“ | Stop auf den Einstiegskurs (nur wenn der Kurs im Gewinn ist) |
 | „move SL to 3610“ | Stop dorthin, aber nur enger, nie weiter weg |
-| „closing now“, „exit“ | alles schließen |
+| „closing now“, „exit“, „calling it a day“ | alles schließen |
 | „cancel“, „don't enter“ | Signal verwerfen, falls noch nicht eröffnet |
-| alles andere (Werbung, News, „TP hit“) | nur protokolliert |
+| alles andere (Werbung, News, „TP hit“, Texte über 300 Zeichen, @-Erwähnungen) | nur protokolliert |
 
 Folgenachrichten wirken auf das Signal, auf das der Kanal antwortet, sonst auf das jüngste Signal der letzten 24 Stunden
 (gleiches Symbol, falls eines genannt ist). Lieber übersehen als falsch lesen: Signale ohne Richtung, Stop oder Ziel
