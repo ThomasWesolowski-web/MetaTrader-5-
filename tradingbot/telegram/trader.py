@@ -235,8 +235,8 @@ class SignalTrader:
             self._finish(rec, "verworfen", f"Kurs {price} liegt schon jenseits des Stops {stop}", now)
             return
         targets = s["ziele"]
-        target = float(targets[0] if self.cfg.target == "erstes" else targets[-1])
-        if d * (target - price) <= 0:
+        target = (float(targets[0] if self.cfg.target == "erstes" else targets[-1])) if targets else None
+        if target is not None and d * (target - price) <= 0:
             self._finish(rec, "verworfen", f"Kurs {price} hat das Ziel {target} schon erreicht", now)
             return
         if lo is not None:
@@ -248,7 +248,7 @@ class SignalTrader:
                     rec["wartet"] = "zone"
                     self._say(f"  Signal {rec['nachricht']} wartet auf die Einstiegszone {lo}-{hi} (Kurs {price})")
                 return
-        rr = d * (target - price) / (d * (price - stop))
+        rr = d * (target - price) / (d * (price - stop)) if target is not None else float("inf")
         if rr < self.cfg.min_rr:
             if rec.get("wartet") != "crv":
                 rec["wartet"] = "crv"
@@ -313,12 +313,12 @@ class SignalTrader:
             if len(cand) == 1:
                 ticket = cand[0]
         rec.update(status="offen", ticket=ticket, einstieg=res["kurs"], volumen=vol, stop=round(stop, digits),
-                   ziel=round(target, digits), risiko=round(risk, 2), digits=digits, eroeffnet_utc=now.isoformat(),
+                   ziel=round(target, digits) if target is not None else None, risiko=round(risk, 2), digits=digits, eroeffnet_utc=now.isoformat(),
                    wartet=None)
         self.event("order_eroeffnet", now, nachricht=rec["nachricht"], ticket=ticket, symbol=rec["symbol"],
                    richtung=d, volumen=vol, kurs=res["kurs"], stop=rec["stop"], ziel=rec["ziel"], risiko=rec["risiko"])
         self._say(f"  ORDER (Demo) {'Kauf' if d == 1 else 'Verkauf'} {vol:g} Lot {rec['symbol']} @ {res['kurs']}, "
-                  f"Stop {rec['stop']}, Ziel {rec['ziel']}, Risiko {risk:.2f} {acc.get('currency', '')}")
+                  f"Stop {rec['stop']}, Ziel {rec['ziel'] or 'offen'}, Risiko {risk:.2f} {acc.get('currency', '')}")
 
     # ------------------------------------------------------------------ Folgenachrichten
     def _target_signal(self, text: str, reply_to: int | None, now) -> dict | None:
@@ -379,7 +379,14 @@ class SignalTrader:
             vol = self._floor_volume(info, float(pos.volume) * pct / 100)
             rest = round(float(pos.volume) - vol, 8)
             if vol <= 0 or rest < float(info.get("volume_min") or 0.01) - 1e-12:
-                return done(f"Position mit {pos.volume:g} Lot ist zu klein zum Teilen – läuft voll weiter")
+                if pct < 50:
+                    return done(f"Position mit {pos.volume:g} Lot ist zu klein für {pct:g} % – läuft voll weiter")
+                # Mindestlot lässt sich nicht teilen: der Kanal nimmt den größeren Teil -> ganz schließen
+                res = close_manual_position(self.mt5, int(pos.ticket), self.cfg.deviation_points,
+                                            f"TG partial {msg_id}", magic=MAGIC_TELEGRAM,
+                                            live_login=self.cfg.live_login)
+                return done(f"{pos.volume:g} Lot nicht teilbar – ganz geschlossen @ {res['kurs']}" if res["ok"]
+                            else f"Schließen fehlgeschlagen: {res['meldung']}")
             res = close_manual_position(self.mt5, int(pos.ticket), self.cfg.deviation_points, f"TG partial {msg_id}",
                                         magic=MAGIC_TELEGRAM, volume=vol, live_login=self.cfg.live_login)
             if not res["ok"]:
@@ -436,7 +443,7 @@ class SignalTrader:
         for rec in sorted(self.st["signale"].values(), key=lambda r: int(r["nachricht"]))[-15:]:
             s = rec["signal"]
             lines.append(f"  {rec['empfangen_utc'][:16]}  {'KAUF' if s['richtung'] == 1 else 'VERKAUF'} {s['symbol']} "
-                         f"Stop {s['stop']} Ziel {s['ziele'][0]} -> {rec['status']}"
+                         f"Stop {s['stop']} Ziel {s['ziele'][0] if s['ziele'] else 'offen'} -> {rec['status']}"
                          + (f" (Ticket {rec['ticket']}, {rec.get('volumen')} Lot)" if rec.get("ticket") else "")
                          + (f", Ergebnis {rec['ergebnis']}" if rec.get("ergebnis") is not None else "")
                          + (f" – {rec['grund']}" if rec.get("grund") and rec["status"] != "beendet" else ""))

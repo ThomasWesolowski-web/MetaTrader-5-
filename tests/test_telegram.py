@@ -70,6 +70,7 @@ def test_rejects_non_signals(text):
     ("Cancel this signal, don't enter", [(CANCEL, None)]),
     ("TP hit ✅ closed in profit", [(INFO, None)]),
     ("Fast profits 🚀", []),
+    ("And calling it a day", [(CLOSE, None)]),
     ("Closing out 80% +400✅", [(PARTIAL, 80.0)]),
     ("Let’s secure atleast 70% here", [(PARTIAL, 70.0)]),
     ("Removing risk here", [(BREAKEVEN, None)]),
@@ -228,13 +229,41 @@ def test_partials_then_breakeven_then_close(tmp_path):
     assert ticket not in mt5.positions
 
 
-def test_partial_with_minimum_lot_keeps_position(tmp_path):
+def test_partial_with_minimum_lot_closes_whole_position(tmp_path):
     tr, mt5 = make(tmp_path, lot=0.01)
     tr.on_message(1, FX_CULTURE, T0, now=T0)
     ticket = tr.st["signale"]["1"]["ticket"]
     mt5.bid = 3600.0
     res = tr.on_message(2, "taking partials", T0, now=T0)
-    assert "zu klein" in res and mt5.positions[ticket].volume == pytest.approx(0.01)
+    assert "nicht teilbar" in res and ticket not in mt5.positions
+
+
+BUY_TRADE = """BUY TRADE XAU/USD
+4054.0-4050
+📍Stop Loss: 4033
+Target: open 
+This is not financial advice. This is a personal trade idea shared for educational and informational purposes only."""
+
+
+def test_parses_buy_trade_without_target():
+    s = parse_signal(BUY_TRADE)
+    assert (s.symbol, s.direction, s.entry_lo, s.entry_hi, s.stop, s.targets) == ("XAUUSD", 1, 4050, 4054, 4033, [])
+    s = parse_signal("SELL TRADE XAU/USD\n📍Stop Loss: 3890\nTarget: open")
+    assert (s.direction, s.entry_lo, s.stop, s.targets) == (-1, None, 3890, [])
+
+
+def test_open_target_trade_runs_without_tp_until_followups(tmp_path):
+    tr, mt5 = make(tmp_path, lot=0.01)
+    mt5.bid = 4052.0
+    assert tr.on_message(1, BUY_TRADE, T0, now=T0) == "offen"
+    req = mt5.sent[0]
+    assert req["type"] == mt5.ORDER_TYPE_BUY and req["sl"] == 4033 and req["tp"] == 0.0
+    ticket = tr.st["signale"]["1"]["ticket"]
+    mt5.bid = 4070.0
+    tr.on_message(2, "Removing risk here", T0, now=T0)
+    assert mt5.positions[ticket].sl == pytest.approx(mt5.positions[ticket].price_open)
+    tr.on_message(3, "And calling it a day", T0, now=T0)
+    assert ticket not in mt5.positions
 
 
 def test_breakeven_refused_when_price_not_in_profit_and_stop_never_widened(tmp_path):

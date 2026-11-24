@@ -35,7 +35,7 @@ class Signal:
     entry_lo: float | None         # Einstiegszone (bei einem einzelnen Kurs lo == hi); None = sofort zum Marktpreis
     entry_hi: float | None
     stop: float
-    targets: list[float] = field(default_factory=list)
+    targets: list[float] = field(default_factory=list)   # leer = "Target: open" (Ausstieg über Folgenachrichten)
 
     def to_dict(self) -> dict:
         return {"symbol": self.symbol, "richtung": self.direction, "zone": [self.entry_lo, self.entry_hi],
@@ -67,12 +67,15 @@ def parse_signal(text: str) -> Signal | None:
     m_sl = re.search(r"(?:STOP\s*-?\s*LOSS|\bSL\b|\bS/L\b|\bSTOP\b)\s*[:@=\-]?\s*" + NUM, up)
     targets = [_num(t) for t in re.findall(
         r"(?:\bTARGETS?\b|\bTP\b|\bTP\d\b|TAKE\s*-?\s*PROFIT)\s*(?:\d\b)?\s*[:@=\-]?\s*" + NUM, up)]
-    if not symbol or not m_sl or not targets:
+    open_target = bool(re.search(r"(?:\bTARGETS?\b|\bTP\b|TAKE\s*-?\s*PROFIT)\s*[:@=\-]?\s*OPEN\b", up))
+    if not symbol or not m_sl or not (targets or open_target):
         return None
     stop = _num(m_sl.group(1))
     m_e = re.search(r"\bENTRY(?:\s*(?:AREA|ZONE|PRICE|POINT|LEVEL))?\s*[:@=]?\s*" + NUM + r"(?:\s*(?:-|/|TO)\s*" + NUM + ")?", up)
     if not m_e:
         m_e = re.search(r"\b(?:BUY|SELL)\b\s*(?:NOW|LIMIT|STOP)?\s*(?:@|AT)?\s*" + NUM + r"(?:\s*(?:-|/|TO)\s*" + NUM + ")?", up)
+    if not m_e:                                                      # Zeile nur mit Kurs(en): "4054.0-4050"
+        m_e = re.search(r"^[^\S\n]*" + NUM + r"(?:[^\S\n]*(?:-|/|TO)[^\S\n]*" + NUM + r")?[^\S\n]*$", up, re.M)
     lo = hi = None
     if m_e:
         a = _num(m_e.group(1))
@@ -86,7 +89,7 @@ def parse_signal(text: str) -> Signal | None:
         targets = [t for t in targets if direction * (t - ref) > 0]
     else:
         targets = [t for t in targets if direction * (t - stop) > 0]
-    if not targets:
+    if not targets and not open_target:
         return None
     base = ref or stop
     if any(abs(x - base) > 0.2 * base for x in [stop, *targets]):
@@ -143,7 +146,7 @@ def parse_followup(text: str) -> list[tuple[str, float | None]]:
         if m:
             acts.append((NEW_STOP, _num(m.group(1))))
     if full_close or (not partial and re.search(
-            r"\b(?:clos(?:e|ing|ed)|exit(?:ing|ed)?|get\s+out)\b"
+            r"\b(?:clos(?:e|ing|ed)|exit(?:ing|ed)?|get\s+out|calling\s+it\s+a\s+day)\b"
             r"(?!\s+(?:to|above|below|under|over|near|the\s+gap|in\s+on))", t)
             and not re.search(r"\b(?:tp|target)s?\s*\d?\s*(?:hit|reached|smashed|done)\b|\bsl\s+hit\b|"
                               r"\bstopped\s+out\b", t)):

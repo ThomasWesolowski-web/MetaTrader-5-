@@ -36,7 +36,7 @@ def describe(text: str) -> str:
     if sig:
         side = "KAUF" if sig.direction == 1 else "VERKAUF"
         zone = f"{sig.entry_lo}-{sig.entry_hi}" if sig.entry_lo is not None else "Marktpreis"
-        return f"SIGNAL: {side} {sig.symbol}, Einstieg {zone}, Stop {sig.stop}, Ziel(e) {', '.join(map(str, sig.targets))}"
+        return f"SIGNAL: {side} {sig.symbol}, Einstieg {zone}, Stop {sig.stop}, Ziel(e) {', '.join(map(str, sig.targets)) or 'offen'}"
     acts = parse_followup(text)
     if acts:
         return "FOLGENACHRICHT: " + ", ".join(a if v is None else f"{a} {v}" for a, v in acts)
