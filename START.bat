@@ -52,6 +52,18 @@ if not errorlevel 1 (
     start "Trading - Beobachtung" /min cmd /k ".venv\Scripts\python.exe daten_aktualisieren.py & .venv\Scripts\python.exe beobachtung_ausfuehren.py"
 )
 
+rem --- 3b. Telegram-Signale (nur wenn schon eingerichtet und angemeldet) ----
+if not exist "telegram_zugang.toml" goto tg_done
+if not exist "data\telegram\konto.session" goto tg_done
+tasklist /V /FI "WINDOWTITLE eq Trading - Telegram-Signale*" | find /I "cmd.exe" >nul
+if not errorlevel 1 (
+    echo  Telegram-Signale laufen bereits.
+) else (
+    echo  Telegram-Signale werden gestartet - eigenes Fenster, minimiert.
+    start "Trading - Telegram-Signale" /min cmd /c TELEGRAM_START.bat
+)
+:tg_done
+
 rem --- 4. Dashboard ----------------------------------------------------------
 netstat -ano | find ":8501 " | find "LISTENING" >nul
 if not errorlevel 1 (

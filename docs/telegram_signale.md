@@ -47,4 +47,6 @@ Fest im Code (in `telegram.toml` nur kleiner einstellbar):
 * Eigene Magic-Nummer 20261124: Positionen des Bots und der Day-Trader-Skills werden nicht angefasst.
   Ein Handelsstopp des Bots gilt auch hier.
 
+**Automatisch:** START.bat (Desktop „Trading starten“, auf Wunsch Autostart bei der Windows-Anmeldung) startet die Telegram-Signale mit, sobald sie einmal eingerichtet und angemeldet sind.
+
 Protokoll: `data/telegram/ereignisse.jsonl`, Stand: `python telegram_signale.py --status`. Beenden: Strg+C oder STOP.bat.
