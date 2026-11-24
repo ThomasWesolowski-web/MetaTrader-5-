@@ -128,6 +128,8 @@ class SignalTrader:
         day = str(_ts(now).date())
         if k["tag"] != day:
             k.update(tag=day, tag_start=float(acc["balance"]), gesperrt=False)
+        if float(acc["balance"]) > (k["tag_start"] or 0):           # Einzahlung oder Gewinn: Tagesbasis anheben
+            k["tag_start"] = float(acc["balance"])
         start = k["tag_start"] or float(acc["balance"])
         if not k["gesperrt"] and start - float(acc["balance"]) >= self.cfg.max_daily_loss_pct / 100 * start:
             k["gesperrt"] = True

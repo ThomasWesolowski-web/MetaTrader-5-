@@ -387,3 +387,11 @@ def test_shipped_config_loads_and_does_not_trade_live_without_account_number():
 def test_pruefen_cli(capsys):
     telegram_signale.main(["--pruefen", FX_CULTURE])
     assert "VERKAUF XAUUSD" in capsys.readouterr().out
+
+
+def test_deposit_raises_daily_base(tmp_path):
+    tr, mt5 = make(tmp_path, FakeMT5(balance=57.97), lot=0.01)
+    mt5.balance = mt5.equity = 307.0                                          # Einzahlung am selben Tag
+    tr.tick(T0 + pd.Timedelta(minutes=1))
+    nxt = T0 + pd.Timedelta(minutes=2)
+    assert tr.on_message(1, FX_CULTURE, nxt, now=nxt) == "offen"             # 17 $ < 25 % von 307 $
