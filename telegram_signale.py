@@ -51,7 +51,8 @@ def _client(tcfg):
     api_id, api_hash = tcfg.credentials()
     sess = Path(tcfg.data_root) / "telegram" / "konto"
     sess.parent.mkdir(parents=True, exist_ok=True)
-    return TelegramClient(str(sess), api_id, api_hash)
+    # bei Netzwerk-Aussetzern unbegrenzt neu verbinden (alle 10 s), statt nach 5 Versuchen aufzugeben
+    return TelegramClient(str(sess), api_id, api_hash, connection_retries=None, retry_delay=10, auto_reconnect=True)
 
 
 async def find_channel(client, name: str):
@@ -149,7 +150,18 @@ async def run(tcfg, mt5_module) -> int:
                 log(f"FEHLER bei Nachricht #{m.id}: {e!r}")
             await flush(client)
 
+        last_conn_check = 0.0
         while not stop_file.exists():
+            if asyncio.get_running_loop().time() - last_conn_check > 60:      # Telegram-Verbindung prüfen
+                last_conn_check = asyncio.get_running_loop().time()
+                if not client.is_connected():
+                    log("Telegram-Verbindung weg – verbinde neu ...")
+                    try:
+                        await client.connect()
+                        await client.catch_up()
+                        log("Telegram wieder verbunden")
+                    except Exception as e:                      # noqa: BLE001 – nächster Versuch in 60 s
+                        print(f"Neu verbinden fehlgeschlagen: {e!r}")
             try:
                 trader.tick()
             except Exception as e:                                  # noqa: BLE001
