@@ -308,7 +308,7 @@ def test_closed_at_broker_is_recorded(tmp_path):
 
 
 def test_limits_positions_and_daily_loss_and_drawdown(tmp_path):
-    tr, mt5 = make(tmp_path, lot=0.01, max_positions=1)
+    tr, mt5 = make(tmp_path, lot=0.01, stop_basis="konto", max_positions=1)
     tr.on_message(1, FX_CULTURE, T0, now=T0)
     assert tr.on_message(2, FX_CULTURE, T0, now=T0) == "verworfen"            # schon 1 Position offen
     mt5.positions.clear()
@@ -393,7 +393,7 @@ def test_pruefen_cli(capsys):
 
 
 def test_deposit_raises_daily_base(tmp_path):
-    tr, mt5 = make(tmp_path, FakeMT5(balance=57.97), lot=0.01)
+    tr, mt5 = make(tmp_path, FakeMT5(balance=57.97), lot=0.01, stop_basis="konto")
     mt5.balance = mt5.equity = 307.0                                          # Einzahlung am selben Tag
     tr.tick(T0 + pd.Timedelta(minutes=1))
     nxt = T0 + pd.Timedelta(minutes=2)
@@ -401,7 +401,7 @@ def test_deposit_raises_daily_base(tmp_path):
 
 
 def test_deposit_shifts_drawdown_peak_and_lifts_stop(tmp_path):
-    tr, mt5 = make(tmp_path, FakeMT5(balance=100.91), lot=0.01)
+    tr, mt5 = make(tmp_path, FakeMT5(balance=100.91), lot=0.01, stop_basis="konto")
     mt5.balance = mt5.equity = 57.97                                          # -42 % -> Stopp
     tr.tick(T0 + pd.Timedelta(hours=1))
     assert tr.st["konto"]["gestoppt"]
@@ -417,7 +417,7 @@ def test_deposit_shifts_drawdown_peak_and_lifts_stop(tmp_path):
 
 
 def test_withdrawal_does_not_trigger_stop(tmp_path):
-    tr, mt5 = make(tmp_path, FakeMT5(balance=300.0), lot=0.01)
+    tr, mt5 = make(tmp_path, FakeMT5(balance=300.0), lot=0.01, stop_basis="konto")
     mt5.cash = [Cash(9002, 2, -200.0)]
     mt5.balance = mt5.equity = 100.0
     tr.tick(T0 + pd.Timedelta(hours=1))
@@ -431,3 +431,24 @@ def test_demo_bot_halt_does_not_block_telegram(tmp_path):
         {"execution": {"halted": True, "halt_reason": "Drawdown 20.5 % >= 20 %"}}), encoding="utf-8")
     tr, mt5 = make(tmp_path, FakeMT5(balance=357.0), lot=0.01)
     assert tr.on_message(1, FX_CULTURE, T0, now=T0) == "offen"
+
+
+def test_bot_basis_ignores_manual_losses_but_counts_own(tmp_path):
+    tr, mt5 = make(tmp_path, FakeMT5(balance=357.0), lot=0.01)              # stop_basis = "bot" (Standard)
+    mt5.balance = mt5.equity = 150.0                                          # Handtrades: -58 %
+    tr.tick(T0 + pd.Timedelta(minutes=1))
+    assert not tr.st["konto"]["gestoppt"] and not tr.st["konto"]["gesperrt"]
+    nxt = T0 + pd.Timedelta(minutes=2)
+    assert tr.on_message(1, FX_CULTURE, nxt, now=nxt) == "offen"
+    t = tr.st["signale"]["1"]["ticket"]
+    mt5.hit_stop(t, -40.0)                                                    # eigener Verlust 40 $ = 27 % von 150
+    tr.tick(T0 + pd.Timedelta(minutes=3))
+    assert tr.st["konto"]["gesperrt"]
+
+
+def test_old_account_stop_lifted_in_bot_mode(tmp_path):
+    tr, mt5 = make(tmp_path, FakeMT5(balance=357.0), lot=0.01)
+    tr.st["konto"].update(gestoppt=True, grund="Drawdown 44.6 % >= 40 %", gesperrt=True, tag=str(T0.date()))
+    tr.st["konto"].pop("bot_tag", None)                                      # Stand von vor der Umstellung
+    tr.tick(T0 + pd.Timedelta(minutes=1))
+    assert not tr.st["konto"]["gestoppt"] and not tr.st["konto"]["gesperrt"]

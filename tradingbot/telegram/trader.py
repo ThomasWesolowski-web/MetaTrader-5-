@@ -122,7 +122,7 @@ class SignalTrader:
         acc = _d(self.mt5.account_info())
         if rel.exists():
             rel.unlink(missing_ok=True)
-            k.update(gestoppt=False, grund=None, hoechststand=acc.get("equity"))
+            k.update(gestoppt=False, grund=None, hoechststand=acc.get("equity"), bot_hoch=None)
             self.event("handel_freigegeben", now, kontostand=acc.get("equity"))
             self._say("Handel wieder freigegeben (Drawdown ab jetzt neu gemessen)")
         if not acc:
@@ -135,6 +135,9 @@ class SignalTrader:
             k["tag_start"] = max(float(k["tag_start"]) + flow, 0.0)
             if k["gesperrt"] and k["tag_start"] - float(acc["balance"]) < self.cfg.max_daily_loss_pct / 100 * k["tag_start"]:
                 k["gesperrt"] = False
+        if self.cfg.stop_basis == "bot":
+            self._bot_checks(acc, day, now)
+            return
         if float(acc["balance"]) > (k["tag_start"] or 0):           # Einzahlung oder Gewinn: Tagesbasis anheben
             k["tag_start"] = float(acc["balance"])
         start = k["tag_start"] or float(acc["balance"])
@@ -161,6 +164,40 @@ class SignalTrader:
         if dd >= self.cfg.max_drawdown_pct / 100 and not k["gestoppt"]:
             k.update(gestoppt=True, grund=f"Drawdown {100 * dd:.1f} % >= {self.cfg.max_drawdown_pct:g} %")
             self.event("handel_gestoppt", now, grund=k["grund"], hoechststand=round(peak, 2), kontostand=round(eq, 2))
+            self._say(f"HANDEL GESTOPPT: {k['grund']}. Weiter nur mit: python telegram_signale.py --handel-freigeben")
+
+    def _bot_pnl(self) -> tuple[float, float]:
+        """(realisiert, offen) – Ergebnis NUR der Telegram-Trades in Kontowährung."""
+        real = sum(float(r.get("ergebnis") or 0) for r in self.st["signale"].values() if r["status"] == "beendet")
+        floating = sum(float(getattr(p, "profit", 0) or 0) for p in self._positions().values())
+        return real, floating
+
+    def _bot_checks(self, acc: dict, day: str, now) -> None:
+        """Tagesverlust und Drawdown nur aus den eigenen Trades (Wahl vom 25.11.2026): Handtrades, Ein- und
+        Auszahlungen bremsen den Bot nicht. Prozent beziehen sich auf den aktuellen Kontostand."""
+        k = self.st["konto"]
+        real, floating = self._bot_pnl()
+        pnl = real + floating
+        if k["gestoppt"] and not str(k.get("grund") or "").startswith("Bot-"):
+            k.update(gestoppt=False, grund=None)                       # Stopp aus der alten Kontomessung
+            self.event("handel_freigegeben", now, grund="Umstellung auf Bot-Trades")
+            self._say("Handel wieder frei: Stopp zählt jetzt nur noch die Telegram-Trades")
+        bal = max(float(acc["balance"]), 1e-9)
+        if k.get("bot_tag") != day:
+            k.update(bot_tag=day, bot_tag_real=real, gesperrt=False)
+        day_loss = max(0.0, float(k.get("bot_tag_real") or 0) - pnl)
+        if not k["gesperrt"] and day_loss >= self.cfg.max_daily_loss_pct / 100 * bal:
+            k["gesperrt"] = True
+            self.event("tageslimit_erreicht", now, verlust=round(day_loss, 2), basis="bot")
+            self._say(f"Tagesverlustgrenze {self.cfg.max_daily_loss_pct:g} % durch Bot-Trades erreicht "
+                      f"({day_loss:.2f}) – heute keine neuen Signale")
+        if "bot_hoch" not in k or k.get("bot_hoch") is None:
+            k["bot_hoch"] = pnl
+        k["bot_hoch"] = max(float(k["bot_hoch"]), pnl)
+        dd = (float(k["bot_hoch"]) - pnl) / bal
+        if dd >= self.cfg.max_drawdown_pct / 100 and not k["gestoppt"]:
+            k.update(gestoppt=True, grund=f"Bot-Drawdown {100 * dd:.1f} % >= {self.cfg.max_drawdown_pct:g} %")
+            self.event("handel_gestoppt", now, grund=k["grund"], basis="bot")
             self._say(f"HANDEL GESTOPPT: {k['grund']}. Weiter nur mit: python telegram_signale.py --handel-freigeben")
 
     def _cash_flows(self, now) -> float:
@@ -331,7 +368,11 @@ class SignalTrader:
         risk = vol * lpl
         k = self.st["konto"]
         start = k["tag_start"] or bal
-        realized = max(0.0, start - bal)
+        if self.cfg.stop_basis == "bot":
+            start = bal
+            realized = max(0.0, float(k.get("bot_tag_real") or 0) - self._bot_pnl()[0])
+        else:
+            realized = max(0.0, start - bal)
         open_risk = sum(float(r.get("risiko") or 0) for r in self.st["signale"].values() if r["status"] == "offen")
         limit = self.cfg.max_daily_loss_pct / 100 * start
         if realized + open_risk + risk > limit + 1e-9:
@@ -464,12 +505,9 @@ class SignalTrader:
     # ------------------------------------------------------------------ Durchlauf
     def tick(self, now=None) -> None:
         now = _ts(now if now is not None else pd.Timestamp.now(tz="UTC"))
-        self.account_checks(now)
         mine = self._positions()
-        for rec in list(self.st["signale"].values()):
-            if rec["status"] == "wartend":
-                self._try_entry(rec, now)
-            elif rec["status"] == "offen" and int(rec["ticket"] or 0) not in mine:
+        for rec in list(self.st["signale"].values()):                # zuerst beim Broker geschlossene erfassen
+            if rec["status"] == "offen" and int(rec["ticket"] or 0) not in mine:
                 deals = [x for x in (self.mt5.history_deals_get(position=int(rec["ticket"])) or ())
                          if getattr(x, "entry", 0) != 0]
                 result = round(sum(float(getattr(x, "profit", 0)) + float(getattr(x, "commission", 0))
@@ -477,6 +515,10 @@ class SignalTrader:
                 rec["ergebnis"] = result
                 rec["risiko"] = 0.0
                 self._finish(rec, "beendet", f"beim Broker geschlossen, Ergebnis {result}", now)
+        self.account_checks(now)
+        for rec in list(self.st["signale"].values()):
+            if rec["status"] == "wartend":
+                self._try_entry(rec, now)
         self.st["letzter_durchlauf_utc"] = now.isoformat()
         self.save()
 

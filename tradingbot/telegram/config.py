@@ -39,6 +39,7 @@ class TelegramConfig:
     target: str = "erstes"
     partial_pct: float = 50.0
     followups: str = "alle"
+    stop_basis: str = "bot"                              # "bot" = nur eigene Trades, "konto" = ganzes Konto
     followup_valid_h: float = 24.0
     max_signal_age_s: int = 180
     deviation_points: int = 100
@@ -72,7 +73,7 @@ KEYS = {"risiko_je_trade_pct": "risk_pct", "max_tagesverlust_pct": "max_daily_lo
         "max_signale_pro_tag": "max_signals_per_day", "min_crv": "min_rr", "einstieg_warten_min": "entry_wait_min",
         "toleranz_r": "tolerance_r", "ziel": "target", "teilgewinn_pct": "partial_pct", "folgenachrichten": "followups",
         "folge_gueltig_h": "followup_valid_h", "max_signal_alter_s": "max_signal_age_s",
-        "abweichung_points": "deviation_points", "lot": "lot"}
+        "abweichung_points": "deviation_points", "lot": "lot", "stopp_basis": "stop_basis"}
 
 
 def load(path: str | Path, data_root: str = "data") -> TelegramConfig:
@@ -113,6 +114,8 @@ def load(path: str | Path, data_root: str = "data") -> TelegramConfig:
     c.lot = max(c.lot, 0.0)
     if c.followups not in FOLLOWUP_MODES:
         raise ValueError(f"telegram.toml: folgenachrichten muss eins von {FOLLOWUP_MODES} sein")
+    if c.stop_basis not in ("bot", "konto"):
+        raise ValueError("telegram.toml: stopp_basis muss \"bot\" oder \"konto\" sein")
     if c.target not in ("erstes", "letztes"):
         raise ValueError("telegram.toml: ziel muss \"erstes\" oder \"letztes\" sein")
     return c
