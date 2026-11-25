@@ -15,7 +15,9 @@ Ablauf je Signal:
 Grenzen (fest im Code begrenzt, siehe config.py): Demokonto oder das eingetragene Live-Konto (execution.py prüft vor
 JEDER Order), Live nur mit fester Lotgröße bis 0,05, Risiko je Signal
 vom Kontostand, Tagesverlust (realisiert + offenes Risiko), Drawdown-Stopp mit ausdrücklicher Freigabe, höchstens
-max_positionen offene Positionen und max_signale_pro_tag Einstiege, Handelsstopp des Bots gilt auch hier.
+max_positionen offene Positionen und max_signale_pro_tag Einstiege. Der Drawdown-Stopp des Demo-Bots (data/paper) gilt
+hier NICHT: er misst ein anderes Konto/ohne Einzahlungen; die Telegram-Signale haben ihren eigenen (am tatsächlichen
+Kontostand, Ein-/Auszahlungen herausgerechnet).
 Orders gehen ausschließlich über tradingbot/execution.py (eigene Magic-Nummer MAGIC_TELEGRAM).
 """
 
@@ -243,9 +245,6 @@ class SignalTrader:
             return f"Handel gestoppt: {k['grund']}"
         if k["gesperrt"]:
             return "Tagesverlustgrenze erreicht"
-        bot = self._bot_halted()
-        if bot:
-            return f"Handelsstopp des Bots aktiv: {bot}"
         return None
 
     def _try_entry(self, rec: dict, now) -> None:

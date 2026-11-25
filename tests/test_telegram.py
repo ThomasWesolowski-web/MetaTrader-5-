@@ -422,3 +422,12 @@ def test_withdrawal_does_not_trigger_stop(tmp_path):
     mt5.balance = mt5.equity = 100.0
     tr.tick(T0 + pd.Timedelta(hours=1))
     assert not tr.st["konto"]["gestoppt"] and tr.st["konto"]["hoechststand"] == pytest.approx(100.0)
+
+
+def test_demo_bot_halt_does_not_block_telegram(tmp_path):
+    import json
+    (tmp_path / "paper").mkdir()
+    (tmp_path / "paper" / "state.json").write_text(json.dumps(
+        {"execution": {"halted": True, "halt_reason": "Drawdown 20.5 % >= 20 %"}}), encoding="utf-8")
+    tr, mt5 = make(tmp_path, FakeMT5(balance=357.0), lot=0.01)
+    assert tr.on_message(1, FX_CULTURE, T0, now=T0) == "offen"

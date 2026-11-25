@@ -45,7 +45,8 @@ Fest im Code (in `telegram.toml` nur kleiner einstellbar):
 * Drawdown 40 % vom Höchststand → Stopp, weiter erst mit `python telegram_signale.py --handel-freigeben`.
 * Höchstens 2 offene Telegram-Positionen, 4 Signale pro Tag, Chance/Risiko mindestens 1.
 * Eigene Magic-Nummer 20261124: Positionen des Bots und der Day-Trader-Skills werden nicht angefasst.
-  Ein Handelsstopp des Bots gilt auch hier.
+  Der Drawdown-Stopp des Demo-Bots gilt hier nicht; die Telegram-Signale messen selbst am tatsächlichen Kontostand
+  (Ein- und Auszahlungen werden herausgerechnet).
 
 **Automatisch:** START.bat (Desktop „Trading starten“, auf Wunsch Autostart bei der Windows-Anmeldung) startet die Telegram-Signale mit, sobald sie einmal eingerichtet und angemeldet sind.
 
