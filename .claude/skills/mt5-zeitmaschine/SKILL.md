@@ -22,12 +22,13 @@ python daytrader.py --json zeitmaschine
 
 1. **Vorrat:** nur vollständige Sitzungen vor dem Plan-Tag, von `start` bis `glattstellen` (Ortszeit). Jede
    Kerze wird zu Verhältnissen zum vorherigen Schlusskurs.
-2. **Ein Durchlauf:** ab dem Einstieg für jede verbleibende Kerze eine vergangene Kerze derselben Tageszeit
-   (± 2 Kerzen) ziehen und auf den aktuellen Kurs skalieren. Zuerst Stop, dann Ziel prüfen; berührt eine
-   Kerze beides, zählt der Stop.
+2. **Ein Durchlauf:** ab dem Einstieg Blöcke von 6 aufeinanderfolgenden Kerzen eines zufälligen vergangenen Tages
+   (gleiche Tageszeit, ± 2 Kerzen) aneinanderhängen und auf den aktuellen Kurs skalieren – ruhige und hektische
+   Phasen bleiben zusammen (`--block 1` = einzelne Kerzen wie früher). Zuerst Stop, dann Ziel prüfen; berührt
+   eine Kerze beides, zählt der Stop.
 3. **R:** Ziel = +Ziel-R, Stop = −1, offen = Abstand zur Glattstellzeit / Risiko. Kommission und Slippage aus dem
-   Kostenszenario (`konservativ`) werden abgezogen ("netto"). Eine Lücke über den Stop zählt hier als −1, echt
-   kann es mehr sein.
+   Kostenszenario (`konservativ`) werden abgezogen ("netto"). Eröffnet eine Kerze jenseits des Stops (Lücke),
+   wird zum Eröffnungskurs gerechnet – dann mehr als −1 R.
 4. **Geschichte:** derselbe Plan auf jedem vergangenen Tag. Das ist wirklich passiert, keine Simulation.
 5. **Urteil:** Gewinnschwelle ist 1 ÷ (1 + R), also 50 % bei 1 R und 40 % bei 1,5 R. Weniger als 5 Punkte
    Abstand: "Nahe am Münzwurf" bzw. "Nahe an der Gewinnschwelle". 5 bis 15: "Neigt zum Ziel/Stop". Mehr: "Deutlich".
@@ -38,3 +39,6 @@ python daytrader.py --json zeitmaschine
 - Immer dazusagen: Simulation aus den letzten Wochen, keine Vorhersage. Nachrichten, Zinsentscheide und
   Wochenenden kennt sie nicht. Eine gute Quote macht aus einem Day-Trade keine sichere Sache.
 - Nächster Schritt, wenn der Nutzer weiter will: `/mt5-risiko`.
+- Fragt der Nutzer, ob eine ganze Strategie (Gold-Bot, Opening Range Breakout) über Monate funktioniert, ist das
+  die große Zeitmaschine: `python zeitmaschine.py goldbot` bzw. `python zeitmaschine.py orb --symbol XAUUSD`
+  (nur Rechnung, keine Orders; Beschreibung `docs/zeitmaschine.md`).

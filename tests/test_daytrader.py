@@ -148,10 +148,28 @@ def test_timemachine_walk_counts_stop_before_target_on_same_bar():
     o = h = l = c = np.array([[100.0, 100.0]])
     h = np.array([[106.0, 100.0]])
     l = np.array([[94.0, 100.0]])
-    res, _ = tm._walk(o, h, l, c, 1, 100.0, 95.0, 105.0, 0.0)
+    res, _, _ = tm._walk(o, h, l, c, 1, 100.0, 95.0, 105.0, 0.0)
     assert res[0] == -1
-    res, _ = tm._walk(o, h, np.array([[99.0, 99.0]]), c, 1, 100.0, 95.0, 105.0, 0.0)
+    res, _, _ = tm._walk(o, h, np.array([[99.0, 99.0]]), c, 1, 100.0, 95.0, 105.0, 0.0)
     assert res[0] == 1
+
+
+def test_timemachine_gap_through_stop_costs_more_than_one_r():
+    """Eröffnet eine Kerze unter dem Stop, wird zum Eröffnungskurs ausgestiegen (früher pauschal −1 R)."""
+    o, h = np.array([[100.0, 90.0]]), np.array([[101.0, 91.0]])
+    l, c = np.array([[99.0, 89.0]]), np.array([[100.0, 90.0]])
+    res, last, spx = tm._walk(o, h, l, c, 1, 100.0, 95.0, 110.0, 0.0)
+    assert res[0] == -1 and spx[0] == 90.0
+    assert tm._r(res, last, 1, 100.0, 5.0, 2.0, 0.0, spx)[0] == -2.0
+
+
+def test_timemachine_blocks_keep_consecutive_candles_of_one_day(ctx):
+    """Blocklänge wird übernommen und verändert die Durchläufe (block=1 = altes Verhalten, einzelne Kerzen)."""
+    planmod.make_plan(ctx, "XAUUSD", direction=1, stop_rule="atr")
+    a = tm.run(ctx, replays=300, block=1)
+    b = tm.run(ctx, replays=300, block=12)
+    assert a["zeitmaschine"]["block_kerzen"] == 1 and b["zeitmaschine"]["block_kerzen"] == 12
+    assert a["zeitmaschine"] != b["zeitmaschine"]
 
 
 def test_verdict_uses_break_even_of_target_r():

@@ -56,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     z.add_argument("--seed", type=int, default=19)
     z.add_argument("--fenster", type=int, default=2)
     z.add_argument("--tage", type=int, default=60)
+    z.add_argument("--block", type=int, default=6, help="Kerzen je Block (1 = einzeln gezogen wie früher)")
     t = sub.add_parser("ticket")
     t.add_argument("--kontostand", type=float, help="nur Vorschau ohne MT5")
     f = sub.add_parser("freigeben")
@@ -92,7 +93,7 @@ def run(argv=None, client=None) -> int:
             res = planmod.make_plan(ctx, a.symbol, a.setup, d, a.stop, a.atr_mult, a.ziel, a.einstieg)
             text = planmod.format_plan(res)
         elif a.cmd == "zeitmaschine":
-            res = tm.run(ctx, None, a.laeufe, a.seed, a.fenster, a.tage)
+            res = tm.run(ctx, None, a.laeufe, a.seed, a.fenster, a.tage, a.block)
             text = tm.format_run(res)
         elif a.cmd == "ticket":
             res = ticketmod.build_ticket(ctx, a.kontostand)
