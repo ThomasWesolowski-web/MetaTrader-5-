@@ -64,6 +64,15 @@ if not errorlevel 1 (
 )
 :tg_done
 
+rem --- 3c. Gold-Bot (Order-Block-Strategie, nur Demo; aus mit aktiv = false) --
+tasklist /V /FI "WINDOWTITLE eq Trading - Gold-Bot*" | find /I "cmd.exe" >nul
+if not errorlevel 1 (
+    echo  Gold-Bot laeuft bereits.
+) else (
+    echo  Gold-Bot wird gestartet - eigenes Fenster, minimiert.
+    start "Trading - Gold-Bot" /min cmd /c GOLDBOT_START.bat auto
+)
+
 rem --- 4. Dashboard ----------------------------------------------------------
 netstat -ano | find ":8501 " | find "LISTENING" >nul
 if not errorlevel 1 (

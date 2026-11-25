@@ -11,3 +11,4 @@ config.toml.bak
 telegram_zugang.toml
 *.session
 *.session-journal
+ki_zugang.toml

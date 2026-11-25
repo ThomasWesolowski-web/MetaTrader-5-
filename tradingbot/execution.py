@@ -2,7 +2,8 @@
 
 Dies ist die EINZIGE Stelle im Programm, die Orders an MetaTrader 5 sendet (ein Test stellt das sicher).
 Neben dem Bot (DemoExecutor) nutzen auch die Day-Trader-Skills (tradingbot/daytrader) und die Telegram-Signale
-(tradingbot/telegram) diese Stelle: send_manual_order / close_manual_position / modify_position_sltp, jeweils mit
+(tradingbot/telegram) und der Gold-Bot (tradingbot/goldbot) diese Stelle: send_manual_order / close_manual_position /
+modify_position_sltp, der Gold-Bot zusätzlich send_pending_order / cancel_pending_order (Limit-Orders), jeweils mit
 eigener Magic-Nummer und denselben Demo-Prüfungen.
 
 Ausnahme (Freigabe des Nutzers vom 23.11.2026): NUR die Telegram-Signale dürfen zusätzlich auf GENAU EINEM
@@ -35,10 +36,12 @@ from .instruments import InstrumentSpec, round_volume_down
 MAGIC = 20261021                  # kennzeichnet Positionen dieses Programms
 MAGIC_DAYTRADER = 20261123        # Positionen der Day-Trader-Skills (vom Bot nicht angefasst)
 MAGIC_TELEGRAM = 20261124         # Positionen aus Telegram-Signalen (vom Bot nicht angefasst)
+MAGIC_GOLDBOT = 20261125          # Orders/Positionen des Gold-Bots (Order-Block-Strategie, nur Demo)
 DEMO = 0                          # ACCOUNT_TRADE_MODE_DEMO
 REAL = 2                          # ACCOUNT_TRADE_MODE_REAL
 RELEASE_FILE = "handel_freigeben.anfrage"
 OK_CODES = (10008, 10009)         # TRADE_RETCODE_PLACED, TRADE_RETCODE_DONE
+INVALID_FILL = 10030              # TRADE_RETCODE_INVALID_FILL
 
 
 def _d(obj) -> dict:
@@ -167,6 +170,57 @@ def modify_position_sltp(mt5, ticket: int, sl: float, tp: float | None, digits: 
            "sl": round(float(sl), digits), "tp": round(float(tp), digits) if tp else 0.0, "magic": int(magic)}
     ok, res, msg = _demo_send(mt5, req, live_login)
     return {"ok": ok, "meldung": msg}
+
+
+def send_pending_order(mt5, symbol: str, direction: int, volume: float, price: float, sl: float, tp: float | None,
+                       digits: int, magic: int = MAGIC_GOLDBOT, comment: str = "GB") -> dict:
+    """Limit-Order (Kauf-Limit unter dem Kurs / Verkaufs-Limit über dem Kurs) mit Stop und Ziel beim Broker – NUR auf
+    einem Demokonto (kein live_login: Limit-Orders gibt es nur für Demo). Verfall steuert der Aufrufer selbst
+    (cancel_pending_order)."""
+    why = _manual_ready(mt5)
+    if why:
+        return {"ok": False, "meldung": why}
+    if direction not in (1, -1) or not (volume > 0) or not (sl > 0) or not (price > 0):
+        return {"ok": False, "meldung": "Order unvollständig (Richtung, Volumen, Kurs oder Stop fehlt)"}
+    if direction * (price - sl) <= 0 or (tp and direction * (tp - price) <= 0):
+        return {"ok": False, "meldung": f"Stop {sl} / Ziel {tp} liegen auf der falschen Seite des Limits {price}"}
+    tick = _d(mt5.symbol_info_tick(symbol))
+    if not tick.get("bid"):
+        return {"ok": False, "meldung": "kein aktueller Kurs"}
+    market = float(tick["ask"] if direction == 1 else tick["bid"])
+    if direction * (market - price) <= 0:
+        return {"ok": False, "meldung": f"Limit {price} liegt nicht {'unter' if direction == 1 else 'über'} dem "
+                                        f"Kurs {market} – keine Limit-Order möglich"}
+    req = {"action": mt5.TRADE_ACTION_PENDING, "symbol": symbol, "volume": float(volume),
+           "type": mt5.ORDER_TYPE_BUY_LIMIT if direction == 1 else mt5.ORDER_TYPE_SELL_LIMIT,
+           "price": round(float(price), digits), "sl": round(float(sl), digits),
+           "tp": round(float(tp), digits) if tp else 0.0, "magic": int(magic), "comment": comment[:31],
+           "type_time": mt5.ORDER_TIME_GTC, "type_filling": _filling_mode(mt5, symbol)}
+    ok, res, msg = _demo_send(mt5, req)
+    if not ok and getattr(res, "retcode", None) == INVALID_FILL and req["type_filling"] != mt5.ORDER_FILLING_RETURN:
+        req["type_filling"] = mt5.ORDER_FILLING_RETURN          # manche Broker wollen für Limit-Orders RETURN
+        ok, res, msg = _demo_send(mt5, req)
+    return {"ok": ok, "meldung": msg, "anfrage": req, "ticket": int(getattr(res, "order", 0) or 0) if ok else None}
+
+
+def cancel_pending_order(mt5, ticket: int, magic: int = MAGIC_GOLDBOT) -> dict:
+    """Eigene, noch nicht ausgeführte Limit-Order löschen (nur Demokonto, nur eigene Magic-Nummer)."""
+    why = _manual_ready(mt5)
+    if why:
+        return {"ok": False, "meldung": why}
+    order = next((o for o in (mt5.orders_get() or ()) if int(o.ticket) == int(ticket)), None)
+    if order is None:
+        return {"ok": False, "meldung": f"Order {ticket} ist nicht (mehr) offen"}
+    if getattr(order, "magic", None) != magic:
+        return {"ok": False, "meldung": f"Order {ticket} gehört nicht zu diesem Programmteil – wird nicht angefasst"}
+    req = {"action": mt5.TRADE_ACTION_REMOVE, "order": int(ticket), "magic": int(magic)}
+    why = account_allowed(_d(mt5.account_info()))
+    if why:
+        return {"ok": False, "meldung": why}
+    res = mt5.order_send(req)                                   # Löschen braucht keine order_check-Prüfung
+    ok = res is not None and getattr(res, "retcode", -1) in OK_CODES
+    return {"ok": ok, "meldung": "ok" if ok else f"Löschen abgelehnt: {getattr(res, 'retcode', None)} "
+                                                 f"{getattr(res, 'comment', '')} {mt5.last_error()}"}
 
 
 class DemoExecutor:

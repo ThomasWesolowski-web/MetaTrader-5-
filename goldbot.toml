@@ -1,0 +1,61 @@
+# Gold-Bot: Order-Block-Strategie für XAUUSD auf M15, automatisch, NUR Demokonto (Beschreibung: docs/goldbot.md)
+# Eigene Magic-Nummer 20261125; Demo-Bot, Day-Trader und Telegram-Signale bleiben unberührt.
+
+[goldbot]
+aktiv = true                 # false = Gold-Bot startet nicht mit "Trading starten"
+orders = true                # false = nur analysieren und melden, keine Orders
+benachrichtigen = true       # Meldungen in deine Telegram-"Gespeicherten Nachrichten" (über die Telegram-Signale)
+# Pfad zu terminal64.exe des MT5, in dem das DEMOKONTO eingeloggt ist. Leer = das zuletzt genutzte Terminal.
+# Läuft im selben MT5 das Live-Konto (Telegram-Signale), braucht der Gold-Bot ein zweites MT5, z. B.
+# terminal_pfad = 'C:\Program Files\STARTRADER MT5 Terminal\terminal64.exe'
+terminal_pfad = ''
+demo_konto = 0               # 0 = jedes Demokonto; sonst nur dieses, z. B. 2100405946
+symbol = "XAUUSD"            # Name beim Broker (z. B. "XAUUSD.r" oder "GOLD")
+
+[handel]
+lot = 0.01                   # je Teil
+teile = 2                    # 2 = zwei Orders à lot: Teil 1 bis Ziel 1, Teil 2 bis Ziel 2 (Stop auf Einstieg nach
+                             #     Ziel 1) – so wird "bei Ziel 1 die Hälfte schließen" mit 0,01 Lot möglich
+                             # 1 = eine Order bis Ziel 2, Stop auf Einstieg bei Ziel 1
+risiko_je_trade_pct = 3.0    # alle Teile zusammen bis zum Stop höchstens so viel vom Kontostand, sonst kein Trade (max. 5)
+max_tagesverlust_pct = 6.0   # eigene Verluste heute (realisiert + offen); danach bis morgen keine neuen Trades (max. 10)
+max_drawdown_pct = 15.0      # eigener Rückgang vom eigenen Höchststand; danach Stopp bis --handel-freigeben (max. 25)
+max_trades_pro_tag = 3
+max_spread_points = 80       # 80 Punkte = 0,80 USD bei Gold
+einstieg_von_utc = 1         # neue Einstiege nur zwischen 1 und 20 Uhr UTC (2-21 Uhr deutscher Winterzeit)
+einstieg_bis_utc = 20
+freitag_bis_utc = 18         # freitags ab 18 Uhr UTC keine neuen Trades, Limit-Orders werden gelöscht
+abweichung_points = 100
+
+[strategie]
+plan_a = true                # Limit im Order Block (Rücksetzer)
+plan_b = true                # Fortsetzung nach Schluss unter/über dem Schlüsseltief/-hoch, Einstieg beim Retest
+kerzen = 600                 # M15-Kerzen für die Analyse
+atr_periode = 14
+swing_k = 3                  # Hoch/Tief = höchste/tiefste Kerze von 3 links und 3 rechts
+ob_abverkauf_atr = 1.5       # nach dem Order Block mindestens 1,5 ATR Bewegung ...
+ob_abverkauf_kerzen = 3      # ... binnen 3 Kerzen, mit Schluss jenseits der OB-Kerze
+ob_max_hoehe_atr = 2.0
+ob_max_abstand_atr = 8.0
+ob_suche_kerzen = 150
+einstieg_im_ob = 0.5         # 0 = vorderer Rand, 0.5 = Mitte, 1 = hinterer Rand
+stop_puffer_atr = 0.3        # Stop so weit hinter dem Order Block bzw. dem Retest-Hoch
+min_stop_atr = 0.5
+max_stop_atr = 5.0
+min_crv = 1.0                # Ziel 1 mindestens so weit entfernt wie der Stop
+ziel_puffer_atr = 0.1        # Ziel knapp vor der Liquidität
+liquiditaet_toleranz_atr = 0.25
+ziel1_ersatz_crv = 1.5         # keine Liquidität weit genug entfernt (z. B. in neuen Tiefs): Ziel 1 = 1,5 x Risiko
+ziel2_ersatz_crv = 3.0         # keine zweite Liquidität: Ziel 2 = 3 x Risiko
+bruch_min_koerper_atr = 0.3
+retest_max_kerzen = 8
+retest_toleranz_atr = 0.15
+limit_gueltig_kerzen = 32    # Limit-Order nach 8 Stunden löschen
+
+[ki]
+aktiv = false                # true = Claude prüft jedes Setup vor der Order (API-Schlüssel in ki_zugang.toml)
+zugang = "ki_zugang.toml"    # Inhalt: api_key = "sk-ant-..."  (Datei liegt nur auf deinem PC)
+modell = "claude-opus-5-5"
+aufwand = "medium"           # low, medium, high
+bei_fehler = "ablehnen"      # KI nicht erreichbar: "ablehnen" = kein Trade, "handeln" = nach den Regeln handeln
+zeitlimit_s = 90
