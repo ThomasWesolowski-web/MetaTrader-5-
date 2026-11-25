@@ -2,18 +2,19 @@
 
 1. Vorrat: nur VOLLSTÄNDIGE Sitzungen vor dem Plan-Tag (alle Kerzen von start bis glattstellen vorhanden, Ortszeit
    der Sitzung). Jede Kerze wird zu vier Verhältnissen zum vorherigen Schlusskurs (Eröffnung, Hoch, Tief, Schluss).
-2. Ein Durchlauf: ab dem Einstieg für jede verbleibende Kerze eine vergangene Kerze derselben Tageszeit (± fenster
-   Kerzen) zufällig ziehen und auf den aktuellen Kurs skalieren. Je Kerze zuerst Stop, dann Ziel prüfen; berührt
-   eine Kerze beides, zählt der Stop. Kurse sind Bid; Short-Ausstiege zum Ask (+ Spread).
-3. Ergebnis in R: Ziel = +ziel_r, Stop = −1 (eine Lücke über den Stop hinaus zählt hier als −1; echt kann es mehr
-   sein), offen zur Glattstellzeit = Abstand / Risiko. Kosten (Kommission, Slippage aus dem Kostenszenario) werden
-   als R abgezogen ("netto").
+2. Ein Durchlauf: ab dem Einstieg werden BLÖCKE von `block` aufeinanderfolgenden Kerzen eines zufälligen vergangenen
+   Tages (gleiche Tageszeit, Block um ± fenster Kerzen verschoben) aneinandergehängt und auf den aktuellen Kurs
+   skaliert. So bleiben ruhige und hektische Phasen zusammen (Volatilität kommt in Schüben); block = 1 wäre das
+   alte Ziehen einzelner Kerzen. Je Kerze zuerst Stop, dann Ziel prüfen; berührt eine Kerze beides, zählt der Stop.
+   Kurse sind Bid; Short-Ausstiege zum Ask (+ Spread).
+3. Ergebnis in R: Ziel = +ziel_r, Stop = −1; eröffnet eine Kerze schon jenseits des Stops (Lücke), wird zum
+   Eröffnungskurs ausgestiegen (mehr als −1 R). Offen zur Glattstellzeit = Abstand / Risiko. Kosten (Kommission,
+   Slippage aus dem Kostenszenario) werden als R abgezogen ("netto").
 4. Geschichte: dieselbe Geometrie auf jedem vergangenen Tag zur selben Uhrzeit, und beim Setup orb dieselbe Regel
    (Opening Range, Stop-Regel, Ziel in R) – das ist, was wirklich passiert ist, keine Simulation.
 
 Eine Simulation aus den eigenen letzten Wochen, keine Vorhersage: Nachrichten, Zinsentscheide oder Wochenenden, die in
-diesen Wochen nicht vorkamen, kennt sie nicht. Kerzen werden unabhängig gezogen; ruhige und hektische Phasen mischen
-sich dadurch.
+diesen Wochen nicht vorkamen, kennt sie nicht. Ganze Strategien über Monate (Gold-Bot, ORB) testet zeitmaschine.py.
 """
 
 from __future__ import annotations
@@ -49,7 +50,8 @@ def _ratios(ohlc: np.ndarray) -> np.ndarray:
 
 
 def _walk(o, h, l, c, d, entry, stop, target, spread):
-    """Erstes Ereignis je Zeile: 1 Ziel, −1 Stop, 0 offen; dazu Schlusskurs der letzten Kerze (Bid)."""
+    """Erstes Ereignis je Zeile: 1 Ziel, −1 Stop, 0 offen; dazu Schlusskurs der letzten Kerze (Bid) und der
+    Ausstiegskurs beim Stop (Stop-Kurs, bei einer Lücke der Eröffnungskurs der Kerze)."""
     if d == 1:
         hit_s, hit_t = l <= stop, h >= target
     else:
@@ -58,13 +60,17 @@ def _walk(o, h, l, c, d, entry, stop, target, spread):
     fs = np.where(hit_s.any(1), hit_s.argmax(1), big)
     ft = np.where(hit_t.any(1), hit_t.argmax(1), big)
     res = np.where((fs <= ft) & (fs < big), -1, np.where(ft < big, 1, 0))
-    return res, c[:, -1]
+    o_at = o[np.arange(o.shape[0]), np.minimum(fs, o.shape[1] - 1)]
+    stop_px = np.minimum(o_at, stop) if d == 1 else np.maximum(o_at + spread, stop)
+    stop_px = np.where(fs < big, stop_px, stop)
+    return res, c[:, -1], stop_px
 
 
-def _r(res, last_bid, d, entry, risk, target_r, spread):
+def _r(res, last_bid, d, entry, risk, target_r, spread, stop_px=None):
     exit_px = last_bid + (spread if d == -1 else 0.0)
     open_r = d * (exit_px - entry) / risk
-    return np.where(res == 1, target_r, np.where(res == -1, -1.0, open_r))
+    stop_r = -1.0 if stop_px is None else d * (stop_px - entry) / risk
+    return np.where(res == 1, target_r, np.where(res == -1, stop_r, open_r))
 
 
 def verdict(p_t: float, p_s: float, target_r: float) -> str:
@@ -82,7 +88,7 @@ def verdict(p_t: float, p_s: float, target_r: float) -> str:
 
 
 def run(ctx: Context, plan: dict | None = None, replays: int = 10_000, seed: int = 19, window: int = 2,
-        days: int = 60) -> dict:
+        days: int = 60, block: int = 6) -> dict:
     plan = plan or ctx.read("plan.json")
     if not plan:
         raise RuntimeError("Kein Plan – zuerst planen (daytrader.py planen)")
@@ -115,18 +121,21 @@ def run(ctx: Context, plan: dict | None = None, replays: int = 10_000, seed: int
     rng = np.random.default_rng(seed)
     K = n - j0
     slot = j0 + np.arange(K)
-    off = rng.integers(-window, window + 1, size=(replays, K))
+    block = max(1, int(block))
+    nb = -(-K // block)
+    blk = np.arange(K) // block                              # Block-Nummer je Kerze
+    off = rng.integers(-window, window + 1, size=(replays, nb))[:, blk]
     s_idx = np.clip(slot[None, :] + off, 0, n - 1)
-    d_idx = rng.integers(0, len(pool_days), size=(replays, K))
+    d_idx = rng.integers(0, len(pool_days), size=(replays, nb))[:, blk]
     r = rat[d_idx, s_idx]                                    # replays x K x 4
     bid0 = entry - spread if d == 1 else entry
     closes = bid0 * np.cumprod(r[:, :, 3], axis=1)
     prev = np.concatenate([np.full((replays, 1), bid0), closes[:, :-1]], axis=1)
     o, h, l, c = prev * r[:, :, 0], prev * r[:, :, 1], prev * r[:, :, 2], closes
-    res, last = _walk(o, h, l, c, d, entry, stop, target, spread)
-    R = _r(res, last, d, entry, risk, target_r, spread)
+    res, last, spx = _walk(o, h, l, c, d, entry, stop, target, spread)
+    R = _r(res, last, d, entry, risk, target_r, spread, spx)
     p_t, p_s, p_o = (float((res == k).mean()) for k in (1, -1, 0))
-    mc = {"laeufe": replays, "seed": seed, "fenster": window, "kerzen_bis_glattstellen": K,
+    mc = {"laeufe": replays, "seed": seed, "fenster": window, "block_kerzen": block, "kerzen_bis_glattstellen": K,
           "ziel_zuerst": round(p_t, 4), "stop_zuerst": round(p_s, 4), "offen_bei_glattstellen": round(p_o, 4),
           "im_plus": round(float((R - cost_r > 0).mean()), 4),
           "mittel_r_brutto": round(float(R.mean()), 3), "mittel_r_netto": round(float(R.mean() - cost_r), 3),
@@ -141,8 +150,8 @@ def run(ctx: Context, plan: dict | None = None, replays: int = 10_000, seed: int
     rr = []
     for i in range(len(pool_days)):
         x = ohlc[i:i + 1, j0:]
-        res_i, last_i = _walk(x[..., 0], x[..., 1], x[..., 2], x[..., 3], d, eo[i], st[i], tg[i], spread)
-        rr.append((int(res_i[0]), float(_r(res_i, last_i, d, eo[i], eo[i] * rp, target_r, spread)[0])))
+        res_i, last_i, sp_i = _walk(x[..., 0], x[..., 1], x[..., 2], x[..., 3], d, eo[i], st[i], tg[i], spread)
+        rr.append((int(res_i[0]), float(_r(res_i, last_i, d, eo[i], eo[i] * rp, target_r, spread, sp_i)[0])))
     hist["gleiche_uhrzeit"] = _summary(rr, cost_r)
     if plan.get("setup") == "orb":
         hist["gleiche_regel"] = _orb_history(ohlc, sess, tf_min, d, plan, spread, target_r, bars, lf, pool_days,
@@ -189,8 +198,8 @@ def _orb_history(ohlc, sess, tf_min, d, plan, spread, target_r, bars, lf, pool_d
                     break
                 y = x[None, j + 1:]
                 t = e + d * target_r * rk
-                res, last = _walk(y[..., 0], y[..., 1], y[..., 2], y[..., 3], d, e, s, t, spread)
-                rr.append((int(res[0]), float(_r(res, last, d, e, rk, target_r, spread)[0])))
+                res, last, spx = _walk(y[..., 0], y[..., 1], y[..., 2], y[..., 3], d, e, s, t, spread)
+                rr.append((int(res[0]), float(_r(res, last, d, e, rk, target_r, spread, spx)[0])))
                 break
     return _summary(rr, cost_r)
 
@@ -200,7 +209,8 @@ def format_run(o: dict) -> str:
     pct = lambda x: f"{100 * x:.1f} %"
     lines = [f"Zeitmaschine {p['symbol']} {'Long' if p['richtung'] == 1 else 'Short'}: Einstieg {p['einstieg']}, "
              f"Stop {p['stop']}, Ziel {p['ziel']} ({p['ziel_r']:g} R)",
-             f"  {mc['laeufe']:,} Durchläufe (Seed {mc['seed']}) aus {h['vollstaendige_tage']} vollständigen Sitzungen, "
+             f"  {mc['laeufe']:,} Durchläufe (Seed {mc['seed']}, Blöcke à {mc.get('block_kerzen', 1)} Kerzen) aus "
+             f"{h['vollstaendige_tage']} vollständigen Sitzungen, "
              f"{mc['kerzen_bis_glattstellen']} Kerzen bis zur Glattstellzeit".replace(",", "."),
              f"  Ziel zuerst {pct(mc['ziel_zuerst'])} · Stop zuerst {pct(mc['stop_zuerst'])} · "
              f"offen bei Glattstellzeit {pct(mc['offen_bei_glattstellen'])}",

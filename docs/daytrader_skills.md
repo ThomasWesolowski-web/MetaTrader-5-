@@ -59,9 +59,10 @@ und bei `symbole` eintragen. Für Symbole ohne lokale Daten braucht es MT5.
 
 ## Grenzen der Aussagekraft
 
-Die Zeitmaschine zieht Kerzen unabhängig voneinander aus den letzten Wochen: ruhige und hektische Phasen
-vermischen sich, Nachrichten und Zinsentscheide kennt sie nicht. Eine Lücke über den Stop zählt als −1 R; echt
-kann der Verlust größer sein. Die Setups selbst sind nicht im Backtest (Phase 3) bewertet. Kein Finanzrat.
+Die Zeitmaschine zieht seit 25.11.2026 Blöcke von 6 aufeinanderfolgenden Kerzen eines vergangenen Tages
+(`--block`, 1 = früheres Verhalten mit Einzelkerzen), damit ruhige und hektische Phasen zusammenbleiben; eine
+Lücke über den Stop wird zum Eröffnungskurs gerechnet (mehr als −1 R). Nachrichten und Zinsentscheide kennt sie
+nicht. Ganze Strategien über Monate, mit Konto- und Ruin-Sicht: `zeitmaschine.py` ([Beschreibung](zeitmaschine.md)). Die Setups selbst sind nicht im Backtest (Phase 3) bewertet. Kein Finanzrat.
 
 ## Tests
 

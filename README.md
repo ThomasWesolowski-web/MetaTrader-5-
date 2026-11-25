@@ -14,6 +14,7 @@ Automatisiertes Handelssystem für Gold und Bitcoin über MetaTrader 5, das schr
 | 5 | Demo-Handel: Orders für die Signale, nur Demokonto, 1,5 % Risiko, Stopp bei 20 % Drawdown | 🔄 umgesetzt – [Beschreibung](docs/phase5_demohandel.md) |
 | + | Day-Trader-Skills für Claude: Scanner, Plan, Zeitmaschine, Risikoprüfung, Order mit Ja-Freigabe (nur Demo) | 🔄 umgesetzt – [Beschreibung](docs/daytrader_skills.md) |
 | + | Gold-Bot: Order-Block-Strategie XAUUSD M15 (Trend, Order Block, Liquidität, Plan A/B), optional mit KI-Prüfung, automatisch, nur Demo | 🔄 umgesetzt – [Beschreibung](docs/goldbot.md) |
+| + | Zeitmaschine: Gold-Bot und Opening Range Breakout auf den eigenen MT5-Kursen testen, mit Kosten, Block-Bootstrap und Ruin-Risiko (keine Orders) | 🔄 umgesetzt – [Beschreibung](docs/zeitmaschine.md) |
 | + | Telegram-Signale (FX Culture) automatisch handeln: Demo oder eingetragenes Live-Konto, feste 0,01 Lot | 🔄 umgesetzt – [Beschreibung](docs/telegram_signale.md) |
 
 ## Phase 4: Dashboard und Beobachtung (keine Orders)
