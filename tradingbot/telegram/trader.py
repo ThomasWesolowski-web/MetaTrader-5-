@@ -251,7 +251,7 @@ class SignalTrader:
         self.st["signale"][str(msg_id)] = rec
         side = "KAUF" if sig.direction == 1 else "VERKAUF"
         zone = f"{sig.entry_lo}-{sig.entry_hi}" if sig.entry_lo is not None else "Markt"
-        self._say(f"SIGNAL {msg_id}: {side} {sig.symbol} Zone {zone}, Stop {sig.stop}, Ziel(e) {sig.targets}")
+        self._say(f"SIGNAL {msg_id}: {side} {sig.symbol} Zone {zone}, Stop {sig.stop}, Ziel(e) {', '.join(map(str, sig.targets)) or 'offen (Ausstieg über Folgenachrichten)'}")
         self.event("signal", now, nachricht=msg_id, **sig.to_dict())
         age = (now - date).total_seconds()
         if age > self.cfg.max_signal_age_s:
