@@ -24,7 +24,7 @@ lot = 0.01                   # feste Lotgröße je Signal (0 = aus dem Risiko be
 risiko_je_trade_pct = 25.0   # höchstens so viel Verlust bis zum Stop (vom Kontostand), sonst kein Trade (max. 25)
 max_tagesverlust_pct = 25.0  # realisiert + offenes Risiko; danach bis morgen keine neuen Signale (max. 25)
 stopp_basis = "bot"          # Tagesverlust/Drawdown: "bot" = nur Telegram-Trades zählen, "konto" = ganzes Konto
-max_drawdown_pct = 40.0      # vom Höchststand; danach Stopp bis --handel-freigeben (max. 40)
+max_drawdown_pct = 65.0      # vom Höchststand; danach Stopp bis --handel-freigeben (max. 65)
 max_positionen = 2           # gleichzeitig offene Telegram-Positionen (max. 2)
 max_signale_pro_tag = 4
 min_crv = 1.0                # Ziel mindestens so weit entfernt wie der Stop (zum tatsächlichen Kurs)

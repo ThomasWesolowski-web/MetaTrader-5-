@@ -10,7 +10,7 @@ from pathlib import Path
 # telegram.toml kann nur darunter gehen.
 CAP_RISK_PCT = 25.0
 CAP_DAILY_LOSS_PCT = 25.0
-CAP_DRAWDOWN_PCT = 40.0
+CAP_DRAWDOWN_PCT = 65.0          # Wahl vom 26.11.2026
 CAP_POSITIONS = 2
 CAP_LIVE_LOT = 0.05          # Live-Konto: feste Lotgröße höchstens so groß (Freigabe 23.11.2026: 0,01 Lot)
 FOLLOWUP_MODES = ("alle", "nur_be_und_schliessen", "aus")
@@ -30,7 +30,7 @@ class TelegramConfig:
     allowed: list = field(default_factory=list)         # leer = alle Symbole, die der Broker anbietet
     risk_pct: float = 25.0
     max_daily_loss_pct: float = 25.0
-    max_drawdown_pct: float = 40.0
+    max_drawdown_pct: float = 65.0
     max_positions: int = 2
     max_signals_per_day: int = 4
     min_rr: float = 1.0

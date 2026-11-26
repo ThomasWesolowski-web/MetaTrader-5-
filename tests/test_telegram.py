@@ -308,7 +308,7 @@ def test_closed_at_broker_is_recorded(tmp_path):
 
 
 def test_limits_positions_and_daily_loss_and_drawdown(tmp_path):
-    tr, mt5 = make(tmp_path, lot=0.01, stop_basis="konto", max_positions=1)
+    tr, mt5 = make(tmp_path, lot=0.01, stop_basis="konto", max_positions=1, max_drawdown_pct=40.0)
     tr.on_message(1, FX_CULTURE, T0, now=T0)
     assert tr.on_message(2, FX_CULTURE, T0, now=T0) == "verworfen"            # schon 1 Position offen
     mt5.positions.clear()
@@ -401,7 +401,7 @@ def test_deposit_raises_daily_base(tmp_path):
 
 
 def test_deposit_shifts_drawdown_peak_and_lifts_stop(tmp_path):
-    tr, mt5 = make(tmp_path, FakeMT5(balance=100.91), lot=0.01, stop_basis="konto")
+    tr, mt5 = make(tmp_path, FakeMT5(balance=100.91), lot=0.01, stop_basis="konto", max_drawdown_pct=40.0)
     mt5.balance = mt5.equity = 57.97                                          # -42 % -> Stopp
     tr.tick(T0 + pd.Timedelta(hours=1))
     assert tr.st["konto"]["gestoppt"]

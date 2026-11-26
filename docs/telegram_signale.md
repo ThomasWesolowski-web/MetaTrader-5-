@@ -42,7 +42,7 @@ Fest im Code (in `telegram.toml` nur kleiner einstellbar):
   Live nur mit fester Lotgröße (höchstens 0,05; eingestellt 0,01).
 * Verlust bis zum Stop höchstens 25 % des Kontostands, sonst kein Trade.
 * Tagesverlust 25 % (nur Telegram-Trades: realisiert + offenes Risiko; mit `stopp_basis = "konto"` das ganze Konto) → bis morgen keine neuen Signale.
-* Drawdown 40 % (nur Ergebnis der Telegram-Trades, bezogen auf den Kontostand) → Stopp, weiter erst mit `python telegram_signale.py --handel-freigeben`.
+* Drawdown 65 % (nur Ergebnis der Telegram-Trades, bezogen auf den Kontostand) → Stopp, weiter erst mit `python telegram_signale.py --handel-freigeben`.
 * Höchstens 2 offene Telegram-Positionen, 4 Signale pro Tag, Chance/Risiko mindestens 1.
 * Eigene Magic-Nummer 20261124: Positionen des Bots und der Day-Trader-Skills werden nicht angefasst.
   Der Drawdown-Stopp des Demo-Bots gilt hier nicht; die Telegram-Signale messen selbst am tatsächlichen Kontostand
