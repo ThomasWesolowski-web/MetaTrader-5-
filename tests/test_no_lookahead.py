@@ -8,6 +8,10 @@ import pytest
 from tradingbot.backtest.runner import trade_strategies
 from tradingbot.strategies import base, create
 
+# Allgemeiner Backtest + Zusatzstrategien des Strategie-Finders (ohne den reinen Filter-Baustein)
+ALLE = trade_strategies() + sorted(n for n in base.available() if getattr(base._REGISTRY[n], "nur_finder", False)
+                                   and n != "finder_gefiltert")
+
 
 @pytest.fixture(scope="module")
 def bars():
@@ -22,7 +26,7 @@ def bars():
                          "tick_volume": rng.integers(1, 200, n)})
 
 
-@pytest.mark.parametrize("name", trade_strategies())
+@pytest.mark.parametrize("name", ALLE)
 def test_signals_do_not_change_when_future_is_removed(bars, name):
     for params in (base._REGISTRY[name].param_grid or [{}])[:2]:
         full = create(name, **params).entries(bars)
@@ -39,7 +43,7 @@ def test_signals_do_not_change_when_future_is_removed(bars, name):
                     assert np.array_equal(np.asarray(a), np.asarray(b)[:cut])
 
 
-@pytest.mark.parametrize("name", trade_strategies())
+@pytest.mark.parametrize("name", ALLE)
 def test_stops_on_correct_side_and_documented(bars, name):
     cls = base._REGISTRY[name]
     assert cls.description and cls.rules and cls.param_grid

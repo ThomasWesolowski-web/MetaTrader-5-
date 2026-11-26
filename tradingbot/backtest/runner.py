@@ -54,7 +54,8 @@ CRITERIA = {
 
 
 def trade_strategies() -> list[str]:
-    return [n for n in available() if issubclass(strategy_base._REGISTRY[n], TradeStrategy)]
+    return [n for n in available() if issubclass(strategy_base._REGISTRY[n], TradeStrategy)
+            and not getattr(strategy_base._REGISTRY[n], "nur_finder", False)]
 
 
 def strategies_for(tf: str, names) -> list[str]:
