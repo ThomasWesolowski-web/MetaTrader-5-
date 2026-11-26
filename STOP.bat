@@ -11,6 +11,9 @@ if not exist "data\paper" mkdir "data\paper"
 type nul > "data\paper\stop.anfrage"
 timeout /t 5 /nobreak >nul
 taskkill /FI "WINDOWTITLE eq Trading - Beobachtung*" /T /F >nul 2>&1
+echo  Telegram-Signale werden beendet ...
+if exist "data\telegram" type nul > "data\telegram\stop.anfrage"
+taskkill /FI "WINDOWTITLE eq Trading - Telegram-Signale*" /T /F >nul 2>&1
 echo  Dashboard wird beendet ...
 taskkill /FI "WINDOWTITLE eq Trading - Dashboard*" /T /F >nul 2>&1
 if exist "data\paper\stop.anfrage" del "data\paper\stop.anfrage"
