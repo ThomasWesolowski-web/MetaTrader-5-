@@ -22,6 +22,7 @@ class TelegramConfig:
     credentials_file: str = "telegram_zugang.toml"
     orders_enabled: bool = True
     notify: bool = True                                  # Meldungen in die "Gespeicherten Nachrichten" schicken
+    terminal_path: str = ""                              # terminal64.exe des MT5 mit dem Live-Konto (leer = Standard)
     account: str = "demo"                                # "demo" oder "live"
     live_account: int = 0                                # Kontonummer des Live-Kontos (vom Nutzer eingetragen)
     lot: float = 0.0                                     # feste Lotgröße je Signal; 0 = aus dem Risiko berechnen
@@ -85,6 +86,7 @@ def load(path: str | Path, data_root: str = "data") -> TelegramConfig:
     c.credentials_file = str(tg.get("zugang", c.credentials_file))
     c.orders_enabled = bool(tg.get("orders", c.orders_enabled))
     c.notify = bool(tg.get("benachrichtigen", c.notify))
+    c.terminal_path = str(tg.get("terminal_pfad", c.terminal_path))
     c.account = str(tg.get("konto", c.account)).lower()
     c.live_account = int(tg.get("live_konto", 0) or 0)
     c.symbol_suffix = str(sy.get("suffix", ""))

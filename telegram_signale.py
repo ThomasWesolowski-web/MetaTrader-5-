@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from tradingbot import meldungen
 from tradingbot.config import load_config
 from tradingbot.telegram import SignalStore, SignalTrader, load, parse_followup, parse_signal
 from tradingbot.telegram.trader import RELEASE_FILE, STOP_FILE
@@ -114,6 +115,11 @@ async def run(tcfg, mt5_module) -> int:
             outbox.append(text.strip())
 
     async def flush(client) -> None:
+        for text in (meldungen.collect(tcfg.data_root) if tcfg.notify else []):   # z. B. vom Gold-Bot
+            try:
+                await client.send_message("me", text[:4000])
+            except Exception as e:                             # noqa: BLE001
+                print(f"Benachrichtigung fehlgeschlagen: {e!r}")
         if not outbox:
             return
         text = "🤖 Trading-Bot\n" + "\n".join(outbox)
@@ -217,7 +223,7 @@ def main(argv=None) -> int:
           f"Drawdown-Stopp {tcfg.max_drawdown_pct:g} %, max. {tcfg.max_positions} Positionen; "
           f"Folgenachrichten: {tcfg.followups}")
     from tradingbot.mt5_client import MT5Client, MT5Error
-    client = MT5Client(terminal_path=cfg.terminal_path)
+    client = MT5Client(terminal_path=tcfg.terminal_path or cfg.terminal_path)
     import time
     while True:
         try:

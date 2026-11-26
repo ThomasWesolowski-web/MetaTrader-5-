@@ -14,6 +14,9 @@ taskkill /FI "WINDOWTITLE eq Trading - Beobachtung*" /T /F >nul 2>&1
 echo  Telegram-Signale werden beendet ...
 if exist "data\telegram" type nul > "data\telegram\stop.anfrage"
 taskkill /FI "WINDOWTITLE eq Trading - Telegram-Signale*" /T /F >nul 2>&1
+echo  Gold-Bot wird beendet ...
+if exist "data\goldbot" type nul > "data\goldbot\stop.anfrage"
+taskkill /FI "WINDOWTITLE eq Trading - Gold-Bot*" /T /F >nul 2>&1
 echo  Dashboard wird beendet ...
 taskkill /FI "WINDOWTITLE eq Trading - Dashboard*" /T /F >nul 2>&1
 if exist "data\paper\stop.anfrage" del "data\paper\stop.anfrage"
