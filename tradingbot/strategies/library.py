@@ -532,3 +532,7 @@ class SmaBoxTrend(TradeStrategy):
                         break                                  # nur der erste Ausbruch je Kreuzung
         idx, d, st = np.array(out_i, int), np.array(out_d, int), np.array(out_s, float)
         return Signals.build(idx, d, st, np.full(len(idx), np.nan), c, exit_long=cross_dn, exit_short=cross_up)
+
+
+# Zusätzliche Strategien des Strategie-Finders (Bollinger, MACD, Supertrend, Vortag, Inside Bar, Pullback, Filter)
+from . import zusatz as _zusatz  # noqa: E402,F401

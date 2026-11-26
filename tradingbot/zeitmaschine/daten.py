@@ -15,7 +15,7 @@ from ..server_time import parse_scheme
 from ..storage import MarketStore, rates_to_frame
 from ..timeframes import seconds
 
-COLS = ["time", "time_server", "open", "high", "low", "close", "spread"]
+COLS = ["time", "time_server", "open", "high", "low", "close", "spread", "tick_volume"]
 
 # Ersatz, wenn weder MT5 noch specs.json Kontraktdaten liefern (Werte wie bei Vantage/STARTRADER üblich)
 FALLBACK_SPECS = {
@@ -79,6 +79,7 @@ class DataSource:
         out = out.drop_duplicates("time", keep="last").sort_values("time").reset_index(drop=True)
         if "spread" not in out:
             out["spread"] = 0
+        out["tick_volume"] = out["tick_volume"].fillna(0) if "tick_volume" in out else 0
         # laufende (noch nicht abgeschlossene) Kerze weglassen
         end = pd.DatetimeIndex(out["time"]) + pd.Timedelta(seconds=seconds(tf))
         out = out[end <= pd.Timestamp.now(tz="UTC")].reset_index(drop=True)
@@ -132,7 +133,8 @@ def resample(df: pd.DataFrame, tf: str) -> pd.DataFrame:
     x = df.set_index(pd.DatetimeIndex(df["time"]))
     g = x.resample(rule, label="left", closed="left")
     out = pd.DataFrame({"time_server": g["time_server"].first(), "open": g["open"].first(), "high": g["high"].max(),
-                        "low": g["low"].min(), "close": g["close"].last(), "spread": g["spread"].min()})
+                        "low": g["low"].min(), "close": g["close"].last(), "spread": g["spread"].min(),
+                        "tick_volume": g["tick_volume"].sum() if "tick_volume" in x else 0})
     out = out.dropna(subset=["open"])
     out["time_server"] = out["time_server"] - (out["time_server"] % seconds(tf))
     out = out.reset_index().rename(columns={"index": "time"})

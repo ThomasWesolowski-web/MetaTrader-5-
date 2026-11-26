@@ -19,6 +19,7 @@ Start-Sleep -Seconds 4
 
 $desktop = [Environment]::GetFolderPath("Desktop")
 foreach ($f in @((Join-Path $desktop "Trading starten.lnk"), (Join-Path $desktop "Trading stoppen.lnk"),
+                 (Join-Path $desktop "Zeitmaschine.lnk"), (Join-Path $desktop "Strategie-Finder.lnk"),
                  (Join-Path ([Environment]::GetFolderPath("Startup")) "Trading starten.lnk"))) {
     if (Test-Path $f) { Remove-Item $f -Force }
 }

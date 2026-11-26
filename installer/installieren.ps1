@@ -263,11 +263,12 @@ foreach ($ort in @($desktop, $menue)) {
     Verknuepfung (Join-Path $ort "Trading starten.lnk") (Join-Path $Ziel "START.bat") "shell32.dll,137"
     Verknuepfung (Join-Path $ort "Trading stoppen.lnk") (Join-Path $Ziel "STOP.bat") "shell32.dll,131"
     Verknuepfung (Join-Path $ort "Zeitmaschine.lnk") (Join-Path $Ziel "ZEITMASCHINE.bat") "shell32.dll,23"
+    Verknuepfung (Join-Path $ort "Strategie-Finder.lnk") (Join-Path $Ziel "STRATEGIEFINDER.bat") "shell32.dll,22"
 }
 Set-Content -Path (Join-Path $menue "Trading Dashboard.url") -Value "[InternetShortcut]`r`nURL=http://localhost:8501/" -Encoding ASCII
 Verknuepfung (Join-Path $menue "Trading Ordner.lnk") $Ziel "shell32.dll,3"
 Verknuepfung (Join-Path $menue "Trading deinstallieren.lnk") (Join-Path $Ziel "DEINSTALLIEREN.bat") "shell32.dll,31"
-Ok "Desktop: 'Trading starten', 'Trading stoppen' und 'Zeitmaschine'; Startmenü: Ordner 'Trading'"
+Ok "Desktop: 'Trading starten', 'Trading stoppen', 'Zeitmaschine' und 'Strategie-Finder'; Startmenü: Ordner 'Trading'"
 
 $autostart = Join-Path ([Environment]::GetFolderPath("Startup")) "Trading starten.lnk"
 if (JaNein "Soll das Programm automatisch mit Windows starten?" "N") {
